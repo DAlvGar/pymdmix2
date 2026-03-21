@@ -1,0 +1,50 @@
+{
+  "name": "PYR1",
+  "full_name": "PYR1",
+  "description": "Pyridine mixture 1%",
+  "off_file": "PYRWAT1.off",
+  "box_unit": "PYRWAT1",
+  "water_model": "TIP3P",
+  "residues": [
+    {
+      "name": "PYR",
+      "count": 0,
+      "description": ""
+    },
+    {
+      "name": "WAT",
+      "count": 0,
+      "description": ""
+    }
+  ],
+  "probes": [
+    {
+      "name": "WAT",
+      "residue": "WAT",
+      "atoms": [
+        "O"
+      ],
+      "description": "Water oxygen"
+    },
+    {
+      "name": "C",
+      "residue": "PYR",
+      "atoms": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5"
+      ],
+      "description": "Arom"
+    },
+    {
+      "name": "N",
+      "residue": "PYR",
+      "atoms": [
+        "N1"
+      ],
+      "description": "Hydrogen bond acceptor"
+    }
+  ]
+}

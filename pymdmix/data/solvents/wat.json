@@ -1,0 +1,25 @@
+{
+  "name": "WAT",
+  "full_name": "WAT",
+  "description": "Water box",
+  "off_file": "WATBOX.off",
+  "box_unit": "TIP3PBOX",
+  "water_model": "TIP3P",
+  "residues": [
+    {
+      "name": "WAT",
+      "count": 0,
+      "description": ""
+    }
+  ],
+  "probes": [
+    {
+      "name": "WAT",
+      "residue": "WAT",
+      "atoms": [
+        "O"
+      ],
+      "description": "Water oxygen"
+    }
+  ]
+}

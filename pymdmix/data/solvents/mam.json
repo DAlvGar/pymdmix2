@@ -1,0 +1,54 @@
+{
+  "name": "MAM",
+  "full_name": "MAM",
+  "description": "Acetamide 20% mixture",
+  "off_file": "MAMWAT20.off",
+  "box_unit": "MAMWAT20",
+  "water_model": "TIP3P",
+  "residues": [
+    {
+      "name": "MAM",
+      "count": 0,
+      "description": ""
+    },
+    {
+      "name": "WAT",
+      "count": 0,
+      "description": ""
+    }
+  ],
+  "probes": [
+    {
+      "name": "WAT",
+      "residue": "WAT",
+      "atoms": [
+        "O"
+      ],
+      "description": "Water oxygen"
+    },
+    {
+      "name": "N",
+      "residue": "MAM",
+      "atoms": [
+        "N1"
+      ],
+      "description": "Hydrogen bond donor"
+    },
+    {
+      "name": "O",
+      "residue": "MAM",
+      "atoms": [
+        "O1"
+      ],
+      "description": "Hydrogen bond acceptor"
+    },
+    {
+      "name": "CT",
+      "residue": "MAM",
+      "atoms": [
+        "C2"
+      ],
+      "description": "Hydrophobic"
+    }
+  ]
+}

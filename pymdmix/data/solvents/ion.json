@@ -1,0 +1,52 @@
+{
+  "name": "ION",
+  "full_name": "ION",
+  "description": "Ammonium Acetate mixture (Charged mixture)",
+  "off_file": "IONWAT20.off",
+  "box_unit": "CN3COOWAT",
+  "water_model": "TIP3P",
+  "residues": [
+    {
+      "name": "CN3",
+      "count": 0,
+      "description": ""
+    },
+    {
+      "name": "COO",
+      "count": 0,
+      "description": ""
+    },
+    {
+      "name": "WAT",
+      "count": 0,
+      "description": ""
+    }
+  ],
+  "probes": [
+    {
+      "name": "WAT",
+      "residue": "WAT",
+      "atoms": [
+        "O"
+      ],
+      "description": "Water oxygen"
+    },
+    {
+      "name": "NEG",
+      "residue": "COO",
+      "atoms": [
+        "O1",
+        "O2"
+      ],
+      "description": "Negative charge"
+    },
+    {
+      "name": "POS",
+      "residue": "CN3",
+      "atoms": [
+        "N1"
+      ],
+      "description": "Positive charge"
+    }
+  ]
+}
