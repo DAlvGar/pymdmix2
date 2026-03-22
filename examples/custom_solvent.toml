@@ -1,0 +1,41 @@
+# Example Custom Solvent Definition
+# Usage: mdmix create solvent -f custom_solvent.toml
+
+[solvent]
+name = "IPRO"
+description = "Isopropanol/water mixture"
+box_file = "iprowat.off"
+unit_name = "IPROWAT"
+
+# Residues in the solvent mixture
+[[residues]]
+name = "IPR"
+atoms = ["C1", "C2", "C3", "O", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "HO"]
+charge = 0.0
+
+# Probes for analysis
+[[probes]]
+name = "OH"
+residue = "IPR"
+atoms = ["O", "HO"]
+description = "Hydroxyl group - H-bond donor/acceptor"
+
+[[probes]]
+name = "CT"
+residue = "IPR"
+atoms = ["C1", "H1", "H2", "H3"]
+description = "Methyl group - hydrophobic probe"
+
+[[probes]]
+name = "CT2"
+residue = "IPR"
+atoms = ["C3", "H5", "H6", "H7"]
+description = "Second methyl group"
+
+# Center-of-mass probe (optional)
+[[probes]]
+name = "IPR_COM"
+residue = "IPR"
+atoms = []  # Empty = use center of mass
+description = "Isopropanol center of mass"
+is_com = true

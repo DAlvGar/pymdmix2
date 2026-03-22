@@ -1,0 +1,56 @@
+# Example MD Settings Configuration
+# Usage: Used when creating replicas
+
+[mdsettings]
+solvent = "ETA"
+
+# Simulation length
+nanos = 20              # Production length in nanoseconds
+temperature = 300.0     # Kelvin
+timestep = 2.0          # femtoseconds
+
+# Restraints
+# Options: "FREE", "BB" (backbone), "HA" (heavy atoms), "CUSTOM"
+restraint_mode = "FREE"
+restraint_force = 0.0   # kcal/mol·Å² (only used if not FREE)
+restraint_mask = ""     # Amber mask (only used if CUSTOM)
+
+# MD Engine
+# Options: "AMBER", "OPENMM", "GROMACS", "NAMD"
+md_program = "AMBER"
+
+# Ensemble for production
+# Options: "NVT", "NPT"
+production_ensemble = "NVT"
+
+# Step counts
+trajectory_frequency = 500      # Write trajectory every N steps
+minimization_steps = 5000
+heating_steps = 100000          # 200 ps at 2fs timestep
+npt_equilibration_steps = 500000    # 1 ns
+production_steps = 500000       # 1 ns per file
+
+# Heating
+heating_initial_temp = 100.0    # Start from 100K
+
+# NPT settings
+npt_pressure = 1.0              # bar
+
+# Output format
+use_netcdf = true               # NetCDF trajectory format
+wrap_coordinates = true
+
+# Force fields (for AMBER)
+force_fields = [
+    "leaprc.protein.ff14SB",
+    "leaprc.gaff",
+    "leaprc.water.tip3p"
+]
+
+# Folder names
+md_folder = "md"
+eq_folder = "eq"
+min_folder = "min"
+align_folder = "align"
+density_folder = "dgrids"
+energy_folder = "egrids"

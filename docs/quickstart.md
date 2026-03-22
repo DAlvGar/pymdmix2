@@ -1,195 +1,138 @@
-# Quickstart Tutorial
+# Quick Start
 
-This tutorial walks through a complete pyMDMix workflow: from protein preparation to hotspot identification.
+This guide walks you through setting up your first pyMDMix project.
 
-## Prerequisites
+## Overview
 
-- Python 3.10+
-- AmberTools installed (`tleap`, `cpptraj`)
-- A protein structure (PDB file)
+The typical pyMDMix workflow involves:
 
-## Installation
+1. **Prepare** your protein structure (PDB or Amber Object File)
+2. **Create** a project and add your system
+3. **Generate** replicas with chosen solvents and settings
+4. **Run** MD simulations (on your cluster)
+5. **Analyze** trajectories to identify binding hotspots
 
-```bash
-pip install pymdmix
-```
+## Step 1: Prepare Your Structure
 
-## Step 1: Create a Project
+You need either:
+- An **Amber Object File (OFF)** with your parameterized system, or
+- A **clean PDB file** with correct protonation states
 
-```bash
-# Create a new project
-mdmix create project -n my_protein
-
-cd my_protein
-```
-
-This creates the project structure:
-```
-my_protein/
-├── .mdmix/
-│   └── project.toml
-├── systems/
-├── replicas/
-└── analysis/
-```
-
-## Step 2: Prepare the Protein
+For a simple protein:
 
 ```bash
-# Clean and prepare the PDB
-mdmix setup prepare protein.pdb -o protein_clean.pdb
-
-# This will:
-# - Add ACE/NME caps to termini
-# - Detect disulfide bonds
-# - Remove waters and ions
-# - Fix residue naming for Amber
+# In tLeap
+source leaprc.protein.ff14SB
+system = loadPdb myprotein.pdb
+check system
+saveOff system myprotein.off
+quit
 ```
 
-## Step 3: Add a System
+## Step 2: Create a Project
 
-Create a system configuration:
+```bash
+# Create a new project directory
+pymdmix create project myproject
+cd myproject
+```
 
-```toml
-# system.toml
-[system]
-name = "1abc"
-pdb = "protein_clean.pdb"
-solvent = "ETA"
+## Step 3: Add Your System
 
-[solvation]
-buffer = 14.0
+Create a system configuration file (`system.cfg`):
+
+```ini
+[SYSTEM]
+NAME = MyProtein
+OFF = /path/to/myprotein.off
 ```
 
 Add it to the project:
 
 ```bash
-mdmix add system -f system.toml
+pymdmix add system -f system.cfg
 ```
 
 ## Step 4: Create Replicas
 
+Create a replica configuration file (`replica.cfg`):
+
+```ini
+[REPLICA]
+SYSTEM = MyProtein
+SOLVENT = ETA
+NANOS = 20
+RESTRMODE = FREE
+```
+
+Generate the replica:
+
 ```bash
-# Create 3 replicas with ethanol
-mdmix add replica --system 1abc --solvent ETA --count 3 --nanos 20
+pymdmix add replica -f replica.cfg
 ```
 
 This creates:
-```
-replicas/
-├── 1abc_ETA_1/
-│   ├── min/
-│   ├── eq/
-│   └── md/
-├── 1abc_ETA_2/
-└── 1abc_ETA_3/
-```
+- Input files for minimization, equilibration, and production
+- Queue submission scripts
+- Reference structures
 
 ## Step 5: Run Simulations
 
-Generate input files:
+The replica folder contains a `COMMANDS.sh` script with all commands:
 
 ```bash
-# For Amber
-mdmix setup amber --replica 1abc_ETA_1
+cd MyProtein_ETA_1/
+cat COMMANDS.sh
 
-# For OpenMM
-mdmix setup openmm --replica 1abc_ETA_1
+# Submit to your cluster or run locally
+# Modify queue scripts as needed for your HPC system
 ```
 
-Run the simulation (example with Amber):
+## Step 6: Analyze Results
+
+After simulation completes, bring trajectories back and analyze:
 
 ```bash
-cd replicas/1abc_ETA_1
-./run_minimization.sh
-./run_equilibration.sh
-./run_production.sh
+# Align all trajectories
+pymdmix analyze align all
+
+# Calculate density grids
+pymdmix analyze density all
+
+# Convert to energy maps
+pymdmix analyze energy all
+
+# Find hotspots
+pymdmix analyze hotspots all
 ```
 
-## Step 6: Align Trajectories
-
-After simulations complete:
+## View Results
 
 ```bash
-mdmix analyze align --replica 1abc_ETA_1
-# Or align all replicas:
-mdmix analyze align all
+# Check project status
+pymdmix info project
+
+# List replicas
+pymdmix info replicas
+
+# Plot RMSD
+pymdmix plot rmsd all
 ```
 
-## Step 7: Calculate Density Grids
+## Output Files
 
-```bash
-# Calculate density for all probes
-mdmix analyze density --replica 1abc_ETA_1
+After analysis, key outputs include:
 
-# Or by solvent across all replicas
-mdmix analyze density bysolvent -s ETA
-```
-
-This produces:
-- `OH_density.dx` - Hydroxyl probe density
-- `CT_density.dx` - Methyl probe density
-
-## Step 8: Detect Hotspots
-
-```bash
-mdmix analyze hotspots --energy-cutoff -0.5 --cluster-distance 2.0
-
-# Output:
-# - hotspots.json
-# - hotspots.pdb
-# - hotspots_summary.txt
-```
-
-## Step 9: Visualize Results
-
-Load the density grids and hotspots in PyMOL or VMD:
-
-```python
-# In PyMOL
-load protein.pdb
-load OH_density.dx, OH_density
-isosurface OH_surface, OH_density, -1.0
-load hotspots.pdb
-```
-
-## Python API
-
-You can also use pyMDMix as a Python library:
-
-```python
-from pymdmix.core import Grid, load_structure
-from pymdmix.analysis import HotspotAction, HotSpotSet
-
-# Load density grid
-density = Grid.read_dx("OH_density.dx")
-
-# Convert to free energy
-dg = density.to_free_energy(temperature=300.0)
-
-# Detect hotspots
-action = HotspotAction()
-result = action.run(
-    grids={"OH": density},
-    energy_cutoff=-0.5,
-    cluster_distance=2.0,
-)
-
-# Work with hotspot set
-from pymdmix.analysis.hotspots import HotSpotSet
-hs_set = HotSpotSet(probe="OH", name="hydroxyl")
-hs_set.add_hotspots(hotspots)
-
-# Filter
-filtered = hs_set.prune_by_energy(-1.0)
-
-# Cluster
-representatives = hs_set.get_cluster_representatives(cutoff=2.5)
-```
+| File | Description |
+|------|-------------|
+| `*_DG.dx` | Energy grid (free energy in kcal/mol) |
+| `*_density.dx` | Raw density grid |
+| `hotspots.pdb` | Detected binding hotspots |
+| `*_rmsd.dat` | RMSD trajectories |
 
 ## Next Steps
 
-- See [Configuration](configuration.md) for detailed settings
-- See [Solvents](solvents.md) for available solvent mixtures
-- See [Analysis](analysis.md) for advanced analysis options
-- See [CLI Reference](cli.md) for all commands
+- [System Preparation](user-guide/system-preparation.md) - Detailed structure prep
+- [Solvent Mixtures](user-guide/solvents.md) - Available solvents
+- [Analysis Guide](analysis/overview.md) - Full analysis workflow
+- [Tutorials](tutorials/toy-project-setup.md) - Complete walkthrough

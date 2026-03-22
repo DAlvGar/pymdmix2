@@ -603,6 +603,86 @@ def analyze_hotspots(ctx: click.Context, selection_type: str, selection: tuple,
     click.secho("✓ Hotspot detection complete", fg="green")
 
 
+@analyze.command("filter-hotspots")
+@click.argument("input_file", type=click.Path(exists=True))
+@click.option("-o", "--output", type=click.Path(), help="Output file (default: <input>_filtered.json)")
+@click.option("--max-energy", type=float, help="Maximum energy (kcal/mol)")
+@click.option("--min-volume", type=float, help="Minimum volume (Å³)")
+@click.option("--min-points", type=int, help="Minimum grid points")
+@click.option("--cluster", type=float, help="Cluster with this distance cutoff (Å)")
+@click.option("--representatives", is_flag=True, help="Keep only cluster representatives")
+@click.pass_context
+def analyze_filter_hotspots(ctx: click.Context, input_file: str, output: Optional[str],
+                            max_energy: Optional[float], min_volume: Optional[float],
+                            min_points: Optional[int], cluster: Optional[float],
+                            representatives: bool) -> None:
+    """Filter and cluster hotspots.
+
+    Examples:
+        pymdmix analyze filter-hotspots hotspots.json --max-energy -1.0
+        pymdmix analyze filter-hotspots hotspots.json --cluster 2.5 --representatives
+        pymdmix analyze filter-hotspots hotspots.json --min-volume 5.0 -o filtered.json
+    """
+    import json
+    from pymdmix.analysis.hotspots import Hotspot, HotSpotSet
+    import numpy as np
+
+    # Load hotspots
+    with open(input_file) as f:
+        data = json.load(f)
+
+    # Reconstruct hotspots
+    hotspots = []
+    for h in data.get("hotspots", []):
+        hotspots.append(Hotspot(
+            id=h["id"],
+            probe=h["probe"],
+            centroid=tuple(h["centroid"]),
+            energy=h["energy"],
+            volume=h["volume"],
+            n_points=h["n_points"],
+            coords=np.array(h.get("coords", [[0, 0, 0]])),
+            energies=np.array(h.get("energies", [h["energy"]])),
+        ))
+
+    click.echo(f"Loaded {len(hotspots)} hotspots from {input_file}")
+
+    # Create set
+    hs_set = HotSpotSet(
+        probe=data.get("probe", "unknown"),
+        name="filtered",
+        hotspots=hotspots,
+    )
+
+    # Apply filters
+    if max_energy is not None:
+        hs_set = hs_set.prune_by_energy(max_energy)
+        click.echo(f"  After energy filter (≤{max_energy}): {len(hs_set)} hotspots")
+
+    if min_volume is not None:
+        hs_set = hs_set.prune_by_volume(min_volume)
+        click.echo(f"  After volume filter (≥{min_volume}): {len(hs_set)} hotspots")
+
+    if min_points is not None:
+        hs_set = hs_set.prune_by_n_points(min_points)
+        click.echo(f"  After points filter (≥{min_points}): {len(hs_set)} hotspots")
+
+    if cluster is not None:
+        labels = hs_set.cluster(cutoff=cluster)
+        click.echo(f"  Clustering ({cluster} Å): {hs_set.n_clusters} clusters")
+
+        if representatives:
+            hs_set = hs_set.get_cluster_representatives(cutoff=cluster)
+            click.echo(f"  Representatives: {len(hs_set)} hotspots")
+
+    # Save output
+    if output is None:
+        output = input_file.replace(".json", "_filtered.json")
+
+    hs_set.to_json(output)
+    click.secho(f"✓ Saved {len(hs_set)} hotspots to {output}", fg="green")
+
+
 @analyze.command("residence")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
@@ -788,6 +868,43 @@ def info_solvents(ctx: click.Context, detailed: bool) -> None:
                 click.echo(f"           Probes: {', '.join(probes)}")
         except Exception:
             click.echo(f"  {name:8s} - (error loading)")
+
+
+@info.command("settings")
+@click.option("-s", "--solvent", default="WAT", help="Solvent name")
+@click.option("-f", "--file", "config_file", type=click.Path(exists=True),
+              help="Load settings from TOML file")
+@click.option("--restraints", type=click.Choice(["FREE", "BB", "HA"]), default="FREE",
+              help="Restraint mode")
+@click.option("--nanos", type=int, default=20, help="Simulation length")
+@click.pass_context
+def info_settings(ctx: click.Context, solvent: str, config_file: Optional[str],
+                  restraints: str, nanos: int) -> None:
+    """Show MD settings (default or from file).
+
+    Examples:
+        pymdmix info settings
+        pymdmix info settings -s ETA --nanos 40
+        pymdmix info settings -f mdsettings.toml
+    """
+    from pymdmix.project.settings import MDSettings
+
+    if config_file:
+        settings = MDSettings.from_toml(config_file)
+        click.echo(f"Settings from: {config_file}")
+    else:
+        settings = MDSettings(
+            solvent=solvent,
+            restraint_mode=restraints,
+            nanos=nanos,
+        )
+        click.echo("Default settings (customize with options or -f):")
+
+    click.echo("")
+    click.echo(settings.summary())
+    click.echo("")
+    click.echo(f"Trajectory files: {settings.n_trajectory_files}")
+    click.echo(f"Total snapshots:  {settings.n_snapshots}")
 
 
 @info.command("analysis")

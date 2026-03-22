@@ -1,0 +1,29 @@
+# Example Replica Configuration
+# Usage: mdmix add replica -f replica.toml
+
+[replica]
+name = "kinase_ETA_1"
+solvent = "ETA"
+system = "kinase"  # Reference to system name
+
+[md]
+# Override default MD settings for this replica
+nanos = 20
+temperature = 300.0
+restraint_mode = "FREE"
+
+# Custom alignment mask (optional)
+# Leave empty to use automatic mask
+align_mask = ""
+
+[analysis]
+# Probes to analyze for this replica
+# Leave empty to use all probes from solvent
+probes = ["OH", "CT"]
+
+# Steps to include in analysis (empty = all)
+# Useful for excluding equilibration or problematic frames
+steps = []
+
+# Frame selection (every Nth frame)
+frame_step = 1

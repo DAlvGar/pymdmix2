@@ -1,0 +1,23 @@
+# Example System Configuration
+# Usage: mdmix add system -f system.toml
+
+[system]
+name = "1abc"
+pdb = "protein_clean.pdb"
+solvent = "ETA"
+
+[preparation]
+# Terminal capping
+cap_termini = true
+# Detect and handle disulfide bonds
+detect_disulfides = true
+# Remove crystallographic waters
+remove_waters = true
+# Non-standard residues to keep (e.g., ligands, cofactors)
+extra_residues = []
+
+[solvation]
+# Box buffer distance from protein (Angstroms)
+buffer = 14.0
+# Solvent box shape: "cubic" or "octahedral"
+box_shape = "cubic"

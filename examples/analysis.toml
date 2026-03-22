@@ -1,0 +1,67 @@
+# Example Analysis Configuration
+# Usage: mdmix analyze --config analysis.toml
+
+[alignment]
+# Mask for trajectory alignment (Amber mask format)
+# Examples: ":1-150@CA" (CA atoms of residues 1-150)
+#           ":1-150@N,CA,C,O" (backbone)
+#           "!:WAT,Na+,Cl-" (everything except water and ions)
+mask = ":1-150@CA"
+
+# Reference structure for alignment
+# Leave empty to use replica's reference PDB
+reference = ""
+
+[density]
+# Grid spacing in Angstroms
+spacing = 0.5
+
+# Distance cutoff from protein surface
+cutoff = 10.0
+
+# Probes to analyze (empty = all probes from solvent)
+probes = []
+
+# Number of CPUs for parallel calculation
+ncpus = 4
+
+[energy]
+# Temperature for free energy calculation
+temperature = 300.0
+
+# Reference density (for ΔG = -RT ln(ρ/ρ_ref))
+reference_density = 1.0
+
+[hotspots]
+# Energy threshold in kcal/mol
+# Only grid points below this are considered
+energy_cutoff = -0.5
+
+# Clustering distance in Angstroms
+cluster_distance = 2.0
+
+# Minimum grid points per cluster
+min_points = 3
+
+# Minimum volume in Å³
+min_volume = 1.0
+
+# Maximum sphericity index (1.0 = perfect sphere)
+max_sphericity = 5.0
+
+[residence]
+# Distance tolerance for residence calculation
+tolerance = 3.0
+
+# Minimum residence time (ps)
+min_time = 10.0
+
+[output]
+# Output directory (relative to project or absolute)
+directory = "analysis"
+
+# Output file prefix
+prefix = ""
+
+# Save intermediate files
+save_intermediates = false
