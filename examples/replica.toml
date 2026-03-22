@@ -1,5 +1,5 @@
 # Example Replica Configuration
-# Usage: mdmix add replica -f replica.toml
+# Usage: pymdmix add replica -f replica.toml
 
 [replica]
 name = "kinase_ETA_1"

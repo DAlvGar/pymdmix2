@@ -1,5 +1,5 @@
 # Example Analysis Configuration
-# Usage: mdmix analyze --config analysis.toml
+# Usage: pymdmix analyze --config analysis.toml
 
 [alignment]
 # Mask for trajectory alignment (Amber mask format)

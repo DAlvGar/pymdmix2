@@ -111,10 +111,10 @@ print(f"Best binding: {energy.data.min():.2f} kcal/mol")
 
 ```bash
 # 1. Prepare structure
-mdmix setup prepare protein.pdb -o protein_clean.pdb
+pymdmix setup prepare protein.pdb -o protein_clean.pdb
 
 # 2. Create project
-mdmix create project -n my_project
+pymdmix create project -n my_project
 
 # 3. Add system (system.cfg)
 cat > system.cfg << EOF
@@ -122,7 +122,7 @@ cat > system.cfg << EOF
 NAME = myprotein
 PDB = protein_clean.pdb
 EOF
-mdmix add system -f system.cfg
+pymdmix add system -f system.cfg
 
 # 4. Add replicas with restraints (replica.cfg)
 cat > replica.cfg << EOF
@@ -133,13 +133,13 @@ NANOS = 50
 RESTRMODE = HA
 RESTRFORCE = 0.01
 EOF
-mdmix add replica -f replica.cfg --count 2
+pymdmix add replica -f replica.cfg --count 2
 
 # 5. After MD - run analysis
-mdmix analyze align all
-mdmix analyze density all
-mdmix analyze energy all
-mdmix analyze hotspots all --threshold -0.5
+pymdmix analyze align all
+pymdmix analyze density all
+pymdmix analyze energy all
+pymdmix analyze hotspots all --threshold -0.5
 ```
 
 ## Configuration Reference

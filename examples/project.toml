@@ -1,5 +1,6 @@
 # Example Project Configuration
-# Usage: mdmix create project -f project.toml
+# NOTE: This is a planned format - not yet implemented in CLI
+# For now, use: pymdmix create project -n NAME
 
 [project]
 name = "kinase_binding_sites"

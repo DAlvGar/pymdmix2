@@ -1,5 +1,5 @@
 # Example System Configuration
-# Usage: mdmix add system -f system.toml
+# Usage: pymdmix add system -f system.toml
 
 [system]
 name = "1abc"

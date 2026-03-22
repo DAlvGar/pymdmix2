@@ -4,79 +4,90 @@ This directory contains example configuration files for pyMDMix.
 
 ## Configuration Files
 
-| File | Purpose | Usage |
-|------|---------|-------|
-| `project.toml` | Project settings | `mdmix create project -f project.toml` |
-| `system.toml` | System definition | `mdmix add system -f system.toml` |
-| `replica.toml` | Replica settings | `mdmix add replica -f replica.toml` |
-| `mdsettings.toml` | MD parameters | Referenced by replicas |
-| `analysis.toml` | Analysis settings | `mdmix analyze --config analysis.toml` |
-| `custom_solvent.toml` | Custom solvent | `mdmix create solvent -f custom_solvent.toml` |
+| File | Purpose | Status |
+|------|---------|--------|
+| `system.toml` | System definition | ✅ `pymdmix add system -f system.cfg` |
+| `replica.toml` | Replica settings | ✅ `pymdmix add replica -f replica.cfg` |
+| `mdsettings.toml` | MD parameters | ✅ Referenced by replicas |
+| `analysis.toml` | Analysis settings | ✅ `pymdmix analyze --config analysis.toml` |
+| `project.toml` | Project defaults | 🚧 Planned - not yet implemented |
+| `custom_solvent.toml` | Custom solvent | 🚧 Planned |
+
+> **Note:** System and replica configs currently use CFG (INI) format.
+> TOML examples show the planned unified format.
 
 ## Quick Start
 
 ```bash
 # 1. Create a project
-mdmix create project -n my_protein
+pymdmix create project -n my_protein
 
 # 2. Prepare your protein
-mdmix setup prepare protein.pdb -o protein_clean.pdb
+pymdmix setup prepare protein.pdb -o protein_clean.pdb
 
-# 3. Copy and edit system.toml
-cp examples/system.toml my_protein/
-# Edit: set pdb = "protein_clean.pdb"
+# 3. Create system config (system.cfg)
+cat > system.cfg << EOF
+[SYSTEM]
+NAME = myprotein
+PDB = protein_clean.pdb
+EOF
 
 # 4. Add the system
-cd my_protein
-mdmix add system -f system.toml
+pymdmix add system -f system.cfg
 
-# 5. Add replicas
-mdmix add replica --system 1abc --solvent ETA --count 3
+# 5. Create replica config (replica.cfg)
+cat > replica.cfg << EOF
+[REPLICA]
+SYSTEM = myprotein
+SOLVENT = ETA
+NANOS = 50
+RESTRMODE = HA
+RESTRFORCE = 0.01
+EOF
 
-# 6. Generate simulation inputs
-mdmix setup amber --replica 1abc_ETA_1
+# 6. Add replicas
+pymdmix add replica -f replica.cfg --count 3
 
-# 7. Run simulations (external)
+# 7. Run simulations (external - Amber/OpenMM)
 # ...
 
 # 8. Analyze
-mdmix analyze align all
-mdmix analyze density bysolvent -s ETA
-mdmix analyze hotspots
+pymdmix analyze align all
+pymdmix analyze density all
+pymdmix analyze energy all
+pymdmix analyze hotspots all
 ```
 
-## File Format
+## File Formats
 
-All configuration files use TOML format. See https://toml.io for syntax.
+### Currently Supported: CFG (INI-style)
 
-### Key Sections
+**system.cfg:**
+```ini
+[SYSTEM]
+NAME = myprotein
+PDB = protein_clean.pdb
+OFF = protein.off        # Alternative: Amber OFF file
+EXTRARES = LIG,CYX       # Non-standard residues
+```
 
-**project.toml:**
-- `[project]` - Name, description
-- `[defaults]` - Default simulation parameters
-- `[paths]` - Directory structure
+**replica.cfg:**
+```ini
+[REPLICA]
+SYSTEM = myprotein
+SOLVENT = ETA
+NANOS = 50
+RESTRMODE = HA           # FREE | BB | HA | CUSTOM
+RESTRFORCE = 0.01        # kcal/mol·Å²
+RESTRAINMASK = :1-100    # Only for CUSTOM mode
+```
 
-**system.toml:**
-- `[system]` - Name, PDB, solvent
-- `[preparation]` - Cleaning options
-- `[solvation]` - Box parameters
+### Planned: TOML Format
 
-**mdsettings.toml:**
-- `[mdsettings]` - All MD parameters
-
-**replica.toml:**
-- `[replica]` - Name, solvent, system
-- `[md]` - Override MD settings
-- `[analysis]` - Analysis parameters
-
-**analysis.toml:**
-- `[alignment]` - Trajectory alignment
-- `[density]` - Density grid calculation
-- `[energy]` - Free energy conversion
-- `[hotspots]` - Hotspot detection
+The `.toml` files in this directory show the planned unified format.
+See each file for structure examples.
 
 ## See Also
 
 - [User Guide](../docs/user-guide/)
 - [Tutorials](../docs/tutorials/)
-- [CLI Reference](../docs/api/cli-reference.md)

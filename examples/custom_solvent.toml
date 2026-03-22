@@ -1,5 +1,5 @@
 # Example Custom Solvent Definition
-# Usage: mdmix create solvent -f custom_solvent.toml
+# Usage: pymdmix create solvent -f custom_solvent.toml
 
 [solvent]
 name = "IPRO"
