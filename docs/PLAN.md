@@ -252,13 +252,13 @@ def residue_to_atom_property(struct, values: list) -> np.ndarray:
 | - | `analysis/residence.py` | Residence time analysis |
 | - | `analysis/hotspots.py` | Basic hotspot detection |
 
-### ❌ NOT YET PORTED (4 modules)
+### ❌ NOT YET PORTED (2 modules)
 
 | Legacy | Status | Priority |
 |--------|--------|----------|
-| `MDSettings.py` | Not started | P1 |
-| `PDB.py` | Not started | P2 |
-| `Analysis.py` | Partial (ActionsManager missing) | P1 |
+| `MDSettings.py` | ✅ DONE → `project/settings.py` | P1 |
+| `Analysis.py` | ✅ DONE → `analysis/manager.py` | P1 |
+| `PDB.py` | Not needed (covered by structure.py) | P2 |
 | `HotSpotsManager.py` | Partial (clustering missing) | P1 |
 
 ---
@@ -273,41 +273,25 @@ def residue_to_atom_property(struct, values: list) -> np.ndarray:
 
 ### Phase 2: Missing Modules (P1)
 
-#### 2.1 MDSettings Class
+#### 2.1 MDSettings Class ✅ DONE
 **Source**: `pyMDmix-port/pyMDMix/MDSettings.py`
 **Target**: `pymdmix2/pymdmix/project/settings.py`
 
-```python
-@dataclass
-class MDSettings:
-    """MD simulation parameters."""
-    solvent: str
-    nanos: int = 20
-    temperature: float = 300.0
-    timestep: float = 2.0  # fs
-    restraint_mode: str = "FREE"  # FREE, BB, HA, CUSTOM
-    restraint_force: float = 0.0
-    restraint_mask: str = ""
-    align_mask: str = ""
-    # ... parsing from config files
-```
+Implemented as a dataclass with:
+- All simulation parameters (nanos, temp, timestep, restraints, etc.)
+- Derived properties (n_trajectory_files, n_snapshots)
+- TOML config loading
+- Dictionary conversion
 
-#### 2.2 ActionsManager
+#### 2.2 ActionsManager ✅ DONE
 **Source**: `pyMDmix-port/pyMDMix/Analysis.py`
 **Target**: `pymdmix2/pymdmix/analysis/manager.py`
 
-```python
-class ActionsManager:
-    """Run analysis actions on multiple replicas in parallel."""
-    def __init__(self, ncpus: int = 1):
-        ...
-    def add_replicas(self, replicas: list[Replica]):
-        ...
-    def add_actions(self, actions: list[Action]):
-        ...
-    def run(self):
-        # ThreadPoolExecutor-based parallel execution
-```
+Implemented with:
+- ProcessPoolExecutor/ThreadPoolExecutor support
+- Action base class with run()/postprocess()
+- Job/JobResult dataclasses
+- Parallel or serial execution
 
 #### 2.3 HotSpotSet & Clustering
 **Source**: `pyMDmix-port/pyMDMix/HotSpotsManager.py`
@@ -506,7 +490,7 @@ def generate_ss_leap_commands(
 
 ## Testing
 
-Current: **569 tests passing** (updated 2026-03-22)
+Current: **604 tests passing** (updated 2026-03-22 15:50)
 
 Each new module needs:
 - Unit tests in `tests/test_<module>.py`
@@ -552,7 +536,8 @@ Update this section as work progresses:
 | 2026-03-21 | Solvent library, CLI, tests |
 | 2026-03-22 AM | Expanded replica, amber, grid; repo consolidation; Biskit audit |
 | 2026-03-22 PM | **Biskit replacement COMPLETE**: 18 new functions in structure.py + amber.py |
-| Next | MDSettings, ActionsManager, HotSpot clustering |
+| 2026-03-22 PM | **MDSettings** ✅ + **ActionsManager** ✅ implemented (604 tests) |
+| Next | HotSpot clustering |
 
 ---
 
