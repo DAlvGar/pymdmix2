@@ -7,3 +7,6 @@ build/
 *.egg
 .pytest_cache/
 *.dx
+projects/
+.env
+*.log
