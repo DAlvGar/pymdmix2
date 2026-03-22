@@ -108,11 +108,11 @@ class QueueConfig:
                 import tomllib
             except ImportError:
                 import tomli as tomllib  # type: ignore[no-redef]
-            with open(path, "rb") as f:
-                data = tomllib.load(f)
+            with open(path, "rb") as toml_handle:
+                data = tomllib.load(toml_handle)
         elif path.suffix == ".json":
-            with open(path) as f:
-                data = json.load(f)
+            with open(path) as json_handle:
+                data = json.load(json_handle)
         else:
             raise ValueError(
                 f"Unsupported queue config format: {path.suffix!r}. Use .toml or .json"

@@ -302,10 +302,10 @@ class MDSettingsConfigFileParser:
 
                     # Parse replica spec
                     if not repl_spec:
-                        replicas = range(1, self.solv_nrepl.get(solv, 1) + 1)
+                        replicas = list(range(1, self.solv_nrepl.get(solv, 1) + 1))
                     elif "-" in repl_spec:
                         start, end = map(int, repl_spec.split("-"))
-                        replicas = range(start, end + 1)
+                        replicas = list(range(start, end + 1))
                     else:
                         replicas = [int(repl_spec)]
 
@@ -540,21 +540,17 @@ class MDSettingsConfigFileParser:
 
         section_dict = dict(config.items(md_sections[0]))
 
-        restr = section_dict.get("restr")
-        if restr:
-            restr = restr.upper().strip()
+        restr_raw = section_dict.get("restr")
+        restr = restr_raw.upper().strip() if restr_raw else None
 
-        force = section_dict.get("force")
-        if force:
-            force = float(force)
+        force_raw = section_dict.get("force")
+        force = float(force_raw) if force_raw else None
 
-        nanos = section_dict.get("nanos")
-        if nanos:
-            nanos = int(nanos)
+        nanos_raw = section_dict.get("nanos")
+        nanos = int(nanos_raw) if nanos_raw else None
 
-        temp = section_dict.get("temp")
-        if temp:
-            temp = float(temp)
+        temp_raw = section_dict.get("temp")
+        temp = float(temp_raw) if temp_raw else None
 
         restrain_mask = section_dict.get("restrmask", "")
         align_mask = section_dict.get("alignmask", "")
@@ -625,8 +621,8 @@ temp = 300.0
         md_path = f.name
 
     try:
-        parser = MDSettingsConfigFileParser()
-        settings = parser.parse(md_path)
+        md_parser = MDSettingsConfigFileParser()
+        settings = md_parser.parse(md_path)
         print(f"\nMD settings ({len(settings)} total):")
         for s in settings:
             print(f"  {s['solvent']}: nanos={s['nanos']}, restr={s['restr_mode']}")
@@ -681,9 +677,13 @@ def parse_system_config(config_file: str | Path) -> SystemConfig:
     parser = SystemConfigFileParser()
     params = parser.parse(config_file)
 
+    input_path = params.get("off") or params.get("pdb")
+    if input_path is None:
+        raise SystemParserError("System config requires either 'off' or 'pdb'")
+
     return SystemConfig(
         name=params["name"],
-        input_file=Path(params.get("off") or params.get("pdb")),
+        input_file=Path(input_path),
         unit_name=params.get("uname"),
         extra_residues=params.get("extrares"),
         extra_forcefields=params.get("extraff"),

@@ -22,7 +22,7 @@ import gzip
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -134,7 +134,7 @@ class Grid:
         try:
             idx = self.coord_to_index((x, y, z))
             if all(0 <= idx[i] < self.shape[i] for i in range(3)):
-                return float(self.data[idx])
+                return float(self.data[idx])  # type: ignore[arg-type]
         except (IndexError, ValueError):
             pass
         return None
@@ -156,7 +156,7 @@ class Grid:
 
     def __getitem__(self, key: tuple[int, int, int]) -> float:
         """Get value by index."""
-        return self.data[key]
+        return float(self.data[key])
 
     def __setitem__(self, key: tuple[int, int, int], value: float) -> None:
         """Set value by index."""
@@ -296,7 +296,7 @@ class Grid:
         """Convert multiple indices to cartesian coordinates."""
         sp = np.array(self.spacing_tuple)
         origin = np.array(self.origin)
-        return indices * sp + origin
+        return (indices * sp + origin).astype(np.float64)  # type: ignore[no-any-return]
 
     def is_inside(self, coord: NDArray[np.float64] | tuple) -> bool:
         """Check if coordinate is inside grid bounds."""
@@ -826,7 +826,10 @@ class Grid:
 
         # Calculate new origin
         sp = self.spacing_tuple
-        new_origin = tuple(self.origin[i] - buffer * sp[i] for i in range(3))
+        new_origin = cast(
+            tuple[float, float, float],
+            tuple(self.origin[i] - buffer * sp[i] for i in range(3)),
+        )
 
         return Grid(
             data=new_data,
@@ -859,7 +862,10 @@ class Grid:
         ].copy()
 
         sp = self.spacing_tuple
-        new_origin = tuple(self.origin[i] + buffer * sp[i] for i in range(3))
+        new_origin = cast(
+            tuple[float, float, float],
+            tuple(self.origin[i] + buffer * sp[i] for i in range(3)),
+        )
 
         return Grid(
             data=new_data,
@@ -932,8 +938,14 @@ class Grid:
         max_idx = self.coord_to_index(max_coord)
 
         # Clamp to valid range
-        min_idx = tuple(max(0, min(idx, s - 1)) for idx, s in zip(min_idx, self.shape))
-        max_idx = tuple(max(0, min(idx, s - 1)) for idx, s in zip(max_idx, self.shape))
+        min_idx = cast(
+            tuple[int, int, int],
+            tuple(max(0, min(idx, s - 1)) for idx, s in zip(min_idx, self.shape)),
+        )
+        max_idx = cast(
+            tuple[int, int, int],
+            tuple(max(0, min(idx, s - 1)) for idx, s in zip(max_idx, self.shape)),
+        )
 
         new_data = self.data[
             min_idx[0] : max_idx[0] + 1,
@@ -970,8 +982,8 @@ class Grid:
         Grid
             Subgrid
         """
-        min_coord = tuple(c - distance for c in center)
-        max_coord = tuple(c + distance for c in center)
+        min_coord = cast(tuple[float, float, float], tuple(c - distance for c in center))
+        max_coord = cast(tuple[float, float, float], tuple(c + distance for c in center))
         return self.take_subgrid_box(min_coord, max_coord)
 
     # =========================================================================
@@ -1104,12 +1116,12 @@ class Grid:
         """
         path = Path(path)
 
-        origin = None
-        spacing = [None, None, None]
-        shape = None
+        origin: tuple[float, float, float] | None = None
+        spacing: list[float | None] = [None, None, None]
+        shape: tuple[int, int, int] | None = None
         data_lines: list[str] = []
         reading_data = False
-        metadata = {}
+        metadata: dict[str, Any] = {}
 
         opener = gzip.open if str(path).endswith(".gz") else open
 
@@ -1316,7 +1328,7 @@ class Grid:
             idx += 1
 
             # Read section data
-            values = []
+            values: list[float] = []
             while len(values) < nx * ny:
                 line = lines[idx].strip()
                 # Parse 6 values per line

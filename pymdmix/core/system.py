@@ -27,7 +27,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from pymdmix.core.solvent import Solvent
@@ -423,7 +423,7 @@ class System:
             Path to written file, or None if no OFF loaded
         """
         if self.off_manager:
-            return self.off_manager.write(fname)
+            return cast(Path, self.off_manager.write(fname))
         return None
 
     def _init_create(self) -> None:
@@ -452,6 +452,10 @@ class System:
 
     def _create_ref(self) -> None:
         """Create reference PDB from OFF file."""
+        if not os.environ.get("AMBERHOME"):
+            log.warning("AMBERHOME not set; skipping reference PDB creation")
+            return
+
         # Initialize creation system
         self._init_create()
 
@@ -476,6 +480,8 @@ class System:
             # Clean up temp files
             for ext in ("top", "crd", "pdb"):
                 Path(f"tmp.{ext}").unlink(missing_ok=True)
+        except Exception as e:
+            log.warning(f"Could not create reference PDB automatically: {e}")
         finally:
             self._clean_create()
 
@@ -704,7 +710,7 @@ class SolvatedSystem(System):
 
     def get_solvated_pdb(self) -> Any:
         """
-        Get a SolvatedPDB object from the PDB content.
+        Get a solvated structure object from the PDB content.
 
         Returns
         -------
@@ -712,14 +718,16 @@ class SolvatedSystem(System):
             SolvatedPDB instance
         """
         try:
-            from pymdmix.core.structure import SolvatedPDB
+            from pymdmix.core.structure import load_structure
 
             pdb_path = self.get_tmp_pdb_file()
-            result = SolvatedPDB(pdb_path, self.extra_res_list)
+            if pdb_path is None:
+                return None
+            result = load_structure(pdb_path)
             self.clean_tmp()
             return result
         except ImportError:
-            log.warning("SolvatedPDB not available")
+            log.warning("Structure loader not available")
             return None
 
     def get_solvated_pdb_solute(self) -> Any:
@@ -807,7 +815,12 @@ class SolvatedSystem(System):
         finally:
             self.clean_tmp()
 
-    def solvate(self, **kwargs: Any) -> None:
+    def solvate(
+        self,
+        solvent: str | Solvent,
+        suffix: str | None = None,
+        tmp: bool | str = True,
+    ) -> SolvatedSystem:
         """Override to prevent re-solvation of already solvated system."""
         raise SystemError("Cannot solvate an already solvated system")
 

@@ -215,6 +215,8 @@ class Browser:
             Replica directory path
         """
         path = replica.path
+        if path is None:
+            raise DirectoryNotFoundError(f"Replica {replica.name} has no path")
         if subfolder:
             path = path / subfolder
         return self.chdir(path)

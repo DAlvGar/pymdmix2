@@ -37,11 +37,47 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import parmed
+
     from pymdmix.core.grid import Grid
-    from pymdmix.core.structure import Structure
-    from pymdmix.core.trajectory import Trajectory
+    from pymdmix.core.trajectory import TrajectoryReader
 
 log = logging.getLogger(__name__)
+
+
+class ChainedTrajectoryReader:
+    """Chain multiple trajectory files into a single reader interface."""
+
+    def __init__(
+        self,
+        topology: Path,
+        trajectories: list[Path],
+        frame_step: int = 1,
+    ):
+        from pymdmix.core.trajectory import FrameSliceReader, open_trajectory
+
+        if not trajectories:
+            raise ReplicaError("No trajectory files selected")
+
+        self._readers = [
+            FrameSliceReader(open_trajectory(topology, traj), step=frame_step)
+            for traj in trajectories
+        ]
+
+    @property
+    def n_frames(self) -> int:
+        return sum(reader.n_frames for reader in self._readers)
+
+    @property
+    def n_atoms(self) -> int:
+        return int(self._readers[0].n_atoms)
+
+    def __len__(self) -> int:
+        return self.n_frames
+
+    def __iter__(self):
+        for reader in self._readers:
+            yield from reader
 
 
 class ReplicaState(Enum):
@@ -340,7 +376,7 @@ class Replica:
         """Check if minimization stage is complete."""
         checker = self.get_checker(warn=False)
         if checker:
-            return checker.check_minimization()
+            return bool(checker.check_minimization())
         # Fallback: check for min output files
         if self.min_path and self.min_path.exists():
             out_files = list(self.min_path.glob("*.out")) + list(self.min_path.glob("*.rst7"))
@@ -351,7 +387,7 @@ class Replica:
         """Check if equilibration stage is complete."""
         checker = self.get_checker(warn=False)
         if checker:
-            return checker.check_equilibration()
+            return bool(checker.check_equilibration())
         # Fallback: check for eq output files
         if self.eq_path and self.eq_path.exists():
             out_files = list(self.eq_path.glob("*.out")) + list(self.eq_path.glob("*.rst7"))
@@ -380,7 +416,7 @@ class Replica:
 
         checker = self.get_checker(warn=False)
         if checker:
-            return checker.check_production(step_selection=step_selection)
+            return bool(checker.check_production(step_selection=step_selection))
 
         # Fallback: check trajectory files exist
         extensions = self.check_production_extension(step_selection)
@@ -654,6 +690,7 @@ class Replica:
             raise ReplicaError("MD settings not configured")
 
         program = self.settings.md_program.upper()
+        writer: Any
 
         if program == "AMBER":
             from pymdmix.engines.amber import AmberWriter
@@ -704,7 +741,13 @@ class Replica:
         log.info(f"Writing {queue_system} scripts for replica {self.name}")
 
         config = QueueConfig(system=queue_system, **kwargs)
-        script = generate_queue_script(self, config)
+        if self.path is None:
+            raise ReplicaError("Replica path not set")
+        script = generate_queue_script(
+            config=config,
+            job_name=self.name,
+            commands=[f"cd {self.path}", "bash COMMANDS.sh"],
+        )
 
         script_path = self.path / f"submit_{queue_system}.sh"
         script_path.write_text(script)
@@ -804,7 +847,7 @@ class Replica:
         step_selection: list[int] | None = None,
         use_aligned: bool = True,
         frame_step: int = 1,
-    ) -> Trajectory:
+    ) -> TrajectoryReader:
         """
         Get trajectory for this replica.
 
@@ -819,11 +862,9 @@ class Replica:
 
         Returns
         -------
-        Trajectory
+        TrajectoryReader
             Trajectory object for analysis.
         """
-        from pymdmix.core.trajectory import Trajectory
-
         if not self.settings:
             raise ReplicaError("MD settings not configured")
 
@@ -842,8 +883,11 @@ class Replica:
             extensions = self.check_production_extension(step_selection)
             log.debug("Using production trajectory")
 
+        if path is None:
+            raise ReplicaError("Trajectory path not set")
+
         # Build file list
-        files = []
+        files: list[Path] = []
         for step in sorted(step_selection):
             ext = extensions.get(step)
             if not ext:
@@ -854,10 +898,12 @@ class Replica:
 
         # Get topology
         topology = self.topology_path or self.pdb_path
+        if topology is None:
+            raise ReplicaError("Topology or PDB file not found for trajectory loading")
 
-        return Trajectory(files, topology, step=frame_step)
+        return ChainedTrajectoryReader(topology, files, frame_step=frame_step)
 
-    def get_pdb(self) -> Structure:
+    def get_pdb(self) -> parmed.Structure:
         """
         Get PDB structure for this replica.
 

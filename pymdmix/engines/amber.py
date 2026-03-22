@@ -529,6 +529,11 @@ class LeapBuilder:
             return False
 
         # Write solvent OFF to temp file and load
+        if solv is None:
+            log.error(f"Unknown solvent: {solvent}")
+            return False
+
+        # Write solvent OFF to temp file and load
         with tempfile.NamedTemporaryFile(suffix=".off", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
@@ -541,7 +546,7 @@ class LeapBuilder:
             leap.solvate_box(unit, box_unit, buffer, cubic)
 
             # Neutralize
-            if hasattr(solv, "is_ionic") and solv.is_ionic():
+            if solv.is_ionic:
                 # Handle ionic solvents specially
                 self._neutralize_ionic(unit, solv)
             else:
@@ -571,9 +576,8 @@ class LeapBuilder:
         crd: Path | str,
     ) -> bool:
         """Save topology and coordinates."""
-        if not self.leap:
-            self.init_leap()
-        return self.leap.save_amber_parm(unit, top, crd)
+        leap = self.init_leap()
+        return leap.save_amber_parm(unit, top, crd)
 
     def create_off(
         self,
@@ -896,9 +900,9 @@ class AmberWriter:
             f"# Commands for replica {self.replica.name}",
             "",
             "# Set paths",
-            f"TOP={self.replica.topology}",
-            f"CRD={self.replica.coordinates}",
-            f"REF={self.replica.reference or self.replica.coordinates}",
+            f"TOP={self.replica.topology or ''}",
+            f"CRD={self.replica.coordinates or ''}",
+            f"REF={self.replica.reference or self.replica.coordinates or ''}",
             "",
         ]
 
@@ -908,8 +912,8 @@ class AmberWriter:
                 "# Minimization",
                 f"cd {self.replica.min_folder}",
                 self.engine.run_command(
-                    Path("..") / self.replica.topology,
-                    Path("..") / self.replica.coordinates,
+                    Path("..") / (self.replica.topology or "system.prmtop"),
+                    Path("..") / (self.replica.coordinates or "system.inpcrd"),
                     Path("min.in"),
                     "min",
                 ),
@@ -928,7 +932,7 @@ class AmberWriter:
 
         # eq1 (heating)
         cmd = self.engine.run_command(
-            Path("..") / self.replica.topology,
+            Path("..") / (self.replica.topology or "system.prmtop"),
             Path("..") / self.replica.min_folder / "min.rst7",
             Path("eq1.in"),
             "eq1",
@@ -937,7 +941,7 @@ class AmberWriter:
 
         # eq2 (equilibration)
         cmd = self.engine.run_command(
-            Path("..") / self.replica.topology,
+            Path("..") / (self.replica.topology or "system.prmtop"),
             Path("eq1.rst7"),
             Path("eq2.in"),
             "eq2",
@@ -963,7 +967,7 @@ class AmberWriter:
             out_prefix = self.replica.md_output_template.format(step=step, extension="").rstrip(".")
 
             cmd = self.engine.run_command(
-                Path("..") / self.replica.topology,
+                Path("..") / (self.replica.topology or "system.prmtop"),
                 prev_rst,
                 Path("prod.in"),
                 out_prefix,
@@ -987,7 +991,7 @@ class AmberWriter:
             return ""
 
         if settings.restraint_mask:
-            return settings.restraint_mask
+            return str(settings.restraint_mask)
 
         mode = settings.restraint_mode.upper()
 
@@ -1095,7 +1099,7 @@ class AmberEngine:
         str
             Amber input file content
         """
-        cntrl = {
+        cntrl: dict[str, Any] = {
             "imin": 1,
             "maxcyc": maxcyc,
             "ncyc": ncyc,
@@ -1124,7 +1128,7 @@ class AmberEngine:
         """
         Generate NVT heating input.
         """
-        cntrl = {
+        cntrl: dict[str, Any] = {
             "imin": 0,
             "irest": 0,
             "ntx": 1,
@@ -1167,7 +1171,7 @@ class AmberEngine:
         """
         Generate NPT equilibration input.
         """
-        cntrl = {
+        cntrl: dict[str, Any] = {
             "imin": 0,
             "irest": 1,
             "ntx": 5,
@@ -1211,7 +1215,7 @@ class AmberEngine:
         """
         Generate production MD input.
         """
-        cntrl = {
+        cntrl: dict[str, Any] = {
             "imin": 0,
             "irest": 1,
             "ntx": 5,
@@ -1264,6 +1268,76 @@ class AmberEngine:
         )
 
         return cmd
+
+
+# =============================================================================
+# Legacy Compatibility Wrapper
+# =============================================================================
+
+
+class AmberCreateSystem:
+    """
+    Backwards-compatible wrapper used by `core.system`.
+
+    Provides a subset of the legacy API (`load_off`, `create_off`,
+    `solvate_organic`, `save_amber_parm`, `ambpdb`) by delegating to
+    `LeapBuilder` and utility helpers.
+    """
+
+    def __init__(
+        self,
+        ff_list: list[str] | None = None,
+        informative: bool = True,
+    ):
+        self._builder = LeapBuilder(forcefields=ff_list or [])
+        self.leap = self._builder.leap
+        self.log = logging.getLogger(self.__class__.__name__)
+        if not informative:
+            self.log.info = self.log.debug  # type: ignore[method-assign]
+
+    def load_off(self, object_file: str | Path) -> bool:
+        ok = self._builder.load_off(object_file)
+        self.leap = self._builder.leap
+        return ok
+
+    def create_off(
+        self,
+        outprefix: str,
+        inpdb: str | Path,
+        unitname: str = "sys",
+        extra_ff: list[str] | None = None,
+        **kwargs: Any,
+    ) -> bool:
+        out_lib = Path(f"{outprefix}.lib")
+        ok = self._builder.create_off(
+            pdb=inpdb,
+            output=out_lib,
+            unit_name=unitname,
+            extra_ff=extra_ff,
+        )
+        self.leap = self._builder.leap
+        return ok
+
+    def solvate_organic(
+        self,
+        unit: str,
+        solvent: Any,
+        buffer: float = 12.0,
+        cubic_box: bool = False,
+    ) -> bool:
+        if hasattr(solvent, "name"):
+            solvent_name = solvent.name
+        else:
+            solvent_name = str(solvent)
+        ok = self._builder.solvate(unit, solvent_name, buffer=buffer, cubic=cubic_box)
+        self.leap = self._builder.leap
+        return ok
+
+    def save_amber_parm(self, unit: str, top: str | Path, crd: str | Path) -> bool:
+        return self._builder.save(unit, top, crd)
+
+    def ambpdb(self, top: str | Path, crd: str | Path, outpdb: str | Path) -> bool:
+        return ambpdb(top, crd, outpdb)
 
 
 # =============================================================================

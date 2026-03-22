@@ -236,7 +236,8 @@ class HotspotAction(Action):
                 centroid = tuple(cluster_coords[min_idx])
 
                 # Calculate volume (n_points * voxel_volume)
-                voxel_volume = density_grid.spacing**3
+                spx, spy, spz = density_grid.spacing_tuple
+                voxel_volume = spx * spy * spz
                 volume = len(cluster_coords) * voxel_volume
 
                 # Volume-weighted energy
@@ -404,7 +405,7 @@ def detect_hotspots(
     with open(json_path) as f:
         data = json.load(f)
 
-    return data["hotspots"]
+    return data["hotspots"]  # type: ignore[no-any-return]
 
 
 # =============================================================================
@@ -707,7 +708,7 @@ class HotSpotSet:
         min_dist = distances[min_idx]
 
         if min_dist <= max_distance:
-            return self.hotspots[min_idx]
+            return self.hotspots[int(min_idx)]
         return None
 
     def to_pdb(self, path: str | Path, only_centroids: bool = True) -> None:

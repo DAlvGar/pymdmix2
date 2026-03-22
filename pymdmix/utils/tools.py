@@ -17,6 +17,8 @@ import traceback
 from itertools import groupby
 from operator import itemgetter
 from pathlib import Path
+from types import FrameType
+from typing import Any
 
 # =============================================================================
 # Exceptions
@@ -383,7 +385,7 @@ def simplify_nested_list(nested_list: list) -> list:
     >>> simplify_nested_list([1, [2, [3, [4]]]])
     [1, 2, 3, 4]
     """
-    result = []
+    result: list[Any] = []
 
     def _flatten(items):
         for item in items:
@@ -426,7 +428,7 @@ def amber_mask_to_dict(mask_string: str) -> dict[str, list[str]]:
     if mask_string.startswith(":"):
         mask_string = mask_string[1:]
 
-    result = {}
+    result: dict[str, list[str]] = {}
     parts = mask_string.split(";")
 
     for part in parts:
@@ -465,7 +467,7 @@ def parse_num_mask(mask: str) -> list[int]:
     >>> parse_num_mask('1-3,7,10-12')
     [1, 2, 3, 7, 10, 11, 12]
     """
-    result = []
+    result: list[int] = []
     parts = mask.split(",")
 
     for part in parts:
@@ -565,7 +567,7 @@ def traceback_plus() -> str:
     ... except:
     ...     tb = traceback_plus()
     """
-    output = []
+    output: list[str] = []
 
     # Get the exception info
     tb = sys.exc_info()[2]
@@ -577,8 +579,8 @@ def traceback_plus() -> str:
         tb = tb.tb_next
 
     # Build stack from tb_frame upward
-    stack = []
-    f = tb.tb_frame
+    stack: list[FrameType] = []
+    f: FrameType | None = tb.tb_frame
     while f:
         stack.append(f)
         f = f.f_back

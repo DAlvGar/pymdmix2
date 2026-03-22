@@ -49,6 +49,7 @@ import tempfile
 from dataclasses import dataclass
 from multiprocessing import Lock, Process, Queue
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -95,7 +96,7 @@ class Subregion:
         valid_x = (x >= self.min_coord[0]) & (x < self.max_coord[0])
         valid_y = (y >= self.min_coord[1]) & (y < self.max_coord[1])
         valid_z = (z >= self.min_coord[2]) & (z < self.max_coord[2])
-        return coords[valid_x & valid_y & valid_z]
+        return coords[valid_x & valid_y & valid_z]  # type: ignore[no-any-return]
 
 
 class DensityWorker(Process):
@@ -178,7 +179,7 @@ class ProteinDensityWorker(Process):
     def __init__(
         self,
         frame_queue: Queue,
-        lock: Lock,
+        lock: Any,
         atom_mask: NDArray[np.bool_],
         count_grid: np.memmap,
         grid_origin: NDArray,
@@ -398,13 +399,14 @@ class DensityAction(Action):
 
     def run(
         self,
-        trajectory: TrajectoryReader,
+        trajectory: Any,
         reference=None,
+        output_dir: Path | None = None,
+        *,
         probe_selections: dict[str, str] | None = None,
         probe_indices: dict[str, NDArray] | None = None,
         spacing: float = 0.5,
         padding: float = 5.0,
-        output_dir: Path | None = None,
         output_prefix: str = "",
         compute_free_energy: bool = False,
         temperature: float = 300.0,
@@ -416,6 +418,9 @@ class DensityAction(Action):
         **kwargs,
     ) -> ActionResult:
         """Execute density calculation."""
+
+        if trajectory is None:
+            return ActionResult(success=False, error="Trajectory is required")
 
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -462,6 +467,7 @@ class DensityAction(Action):
 
         # Calculate grid parameters
         grid_origin, grid_shape = _calculate_grid_params(ref_coords, spacing, padding, sub)
+        grid_origin_tuple = cast(tuple[float, float, float], tuple(float(x) for x in grid_origin))
         self.log.debug(f"Grid origin: {grid_origin}, shape: {grid_shape}")
 
         # Decide sequential vs parallel
@@ -489,7 +495,7 @@ class DensityAction(Action):
             # Create Grid object and normalize
             grid = Grid(
                 data=count_data.astype(np.float64) / n_frames,
-                origin=grid_origin,
+                origin=grid_origin_tuple,
                 spacing=spacing,
             )
 
@@ -536,10 +542,12 @@ class DensityAction(Action):
         grid_shape: tuple[int, int, int],
         spacing: float,
         subregion: Subregion | None,
-    ) -> tuple[dict[str, NDArray], int]:
+    ) -> tuple[dict[str, Any], int]:
         """Run density calculation sequentially."""
         # Create count grids
-        count_grids = {probe.name: np.zeros(grid_shape, dtype=np.uint32) for probe in probes}
+        count_grids: dict[str, Any] = {
+            probe.name: np.zeros(grid_shape, dtype=np.uint32) for probe in probes
+        }
 
         def coord_to_index(coord: NDArray) -> tuple[int, int, int] | None:
             idx = np.floor((coord - grid_origin) / spacing).astype(int)
@@ -589,13 +597,15 @@ class DensityAction(Action):
         spacing: float,
         subregion: Subregion | None,
         n_workers: int,
-    ) -> tuple[dict[str, np.memmap], int]:
+    ) -> tuple[dict[str, Any], int]:
         """Run density calculation in parallel using multiprocessing."""
         # Create memory-mapped count grids
-        count_grids = {probe.name: _create_memmap_grid(grid_shape) for probe in probes}
+        count_grids: dict[str, Any] = {
+            probe.name: _create_memmap_grid(grid_shape) for probe in probes
+        }
 
         # Create frame queue
-        frame_queue = Queue(maxsize=n_workers * 2)
+        frame_queue: Any = Queue(maxsize=n_workers * 2)
 
         # Create workers
         workers = []
@@ -630,7 +640,7 @@ class DensityAction(Action):
 
     def _build_probe_configs(
         self,
-        trajectory: TrajectoryReader,
+        trajectory: Any,
         probe_selections: dict[str, str] | None,
         probe_indices: dict[str, NDArray] | None,
         include_com: bool = False,
@@ -718,7 +728,7 @@ class DensityAction(Action):
             if len(subregion) != 2 or len(subregion[0]) != 3 or len(subregion[1]) != 3:
                 errors.append("subregion must be ((x0,y0,z0), (x1,y1,z1))")
 
-        return errors
+        return cast(list[str], errors)
 
 
 @register_action("density_protein")
@@ -762,13 +772,14 @@ class DensityProteinAction(Action):
 
     def run(
         self,
-        trajectory: TrajectoryReader,
+        trajectory: Any,
         reference=None,
+        output_dir: Path | None = None,
+        *,
         solute_mask: NDArray[np.bool_] | None = None,
         solute_indices: NDArray[np.int64] | None = None,
         spacing: float = 0.5,
         padding: float = 5.0,
-        output_dir: Path | None = None,
         output_prefix: str = "",
         subregion: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None,
         n_workers: int = 1,
@@ -776,10 +787,14 @@ class DensityProteinAction(Action):
     ) -> ActionResult:
         """Execute protein density calculation."""
 
+        if trajectory is None:
+            return ActionResult(success=False, error="Trajectory is required")
+
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Get solute mask
+        mask: NDArray[np.bool_] | NDArray[np.int64]
         if solute_mask is not None:
             mask = solute_mask
         elif solute_indices is not None:
@@ -813,6 +828,7 @@ class DensityProteinAction(Action):
 
         # Calculate grid parameters
         grid_origin, grid_shape = _calculate_grid_params(ref_coords, spacing, padding, sub)
+        grid_origin_tuple = cast(tuple[float, float, float], tuple(float(x) for x in grid_origin))
         self.log.info(f"Grid origin: {grid_origin}, shape: {grid_shape}")
 
         if n_workers > 1:
@@ -831,7 +847,7 @@ class DensityProteinAction(Action):
         # Convert to density
         grid = Grid(
             data=count_grid.astype(np.float64) / n_frames,
-            origin=grid_origin,
+            origin=grid_origin_tuple,
             spacing=spacing,
         )
 
@@ -865,9 +881,9 @@ class DensityProteinAction(Action):
         grid_shape: tuple[int, int, int],
         spacing: float,
         subregion: Subregion | None,
-    ) -> tuple[NDArray, int]:
+    ) -> tuple[Any, int]:
         """Run protein density calculation sequentially."""
-        count_grid = np.zeros(grid_shape, dtype=np.uint32)
+        count_grid: Any = np.zeros(grid_shape, dtype=np.uint32)
 
         def coord_to_index(coord: NDArray) -> tuple[int, int, int] | None:
             idx = np.floor((coord - grid_origin) / spacing).astype(int)
@@ -900,10 +916,10 @@ class DensityProteinAction(Action):
         spacing: float,
         subregion: Subregion | None,
         n_workers: int,
-    ) -> tuple[np.memmap, int]:
+    ) -> tuple[Any, int]:
         """Run protein density calculation in parallel."""
         count_grid = _create_memmap_grid(grid_shape)
-        frame_queue = Queue(maxsize=n_workers * 2)
+        frame_queue: Any = Queue(maxsize=n_workers * 2)
         lock = Lock()
 
         workers = []
@@ -983,19 +999,23 @@ class DensityAllHAAction(Action):
 
     def run(
         self,
-        trajectory: TrajectoryReader,
+        trajectory: Any,
         reference=None,
+        output_dir: Path | None = None,
+        *,
         heavy_atom_info: dict[str, dict[str, list[int]]] | None = None,
         exclude_residues: list[str] | None = None,
         spacing: float = 0.5,
         padding: float = 5.0,
-        output_dir: Path | None = None,
         output_prefix: str = "",
         subregion: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None,
         n_workers: int = 1,
         **kwargs,
     ) -> ActionResult:
         """Execute all heavy atoms density calculation."""
+
+        if trajectory is None:
+            return ActionResult(success=False, error="Trajectory is required")
 
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1036,6 +1056,7 @@ class DensityAllHAAction(Action):
 
         # Calculate grid parameters
         grid_origin, grid_shape = _calculate_grid_params(ref_coords, spacing, padding, sub)
+        grid_origin_tuple = cast(tuple[float, float, float], tuple(float(x) for x in grid_origin))
 
         if n_workers > 1:
             self.log.info(f"Using parallel processing with {n_workers} workers")
@@ -1057,7 +1078,7 @@ class DensityAllHAAction(Action):
 
             grid = Grid(
                 data=count_data.astype(np.float64) / n_frames,
-                origin=grid_origin,
+                origin=grid_origin_tuple,
                 spacing=spacing,
             )
 
@@ -1093,9 +1114,11 @@ class DensityAllHAAction(Action):
         grid_shape: tuple[int, int, int],
         spacing: float,
         subregion: Subregion | None,
-    ) -> tuple[dict[str, NDArray], int]:
+    ) -> tuple[dict[str, Any], int]:
         """Run all HA density calculation sequentially."""
-        count_grids = {name: np.zeros(grid_shape, dtype=np.uint32) for name in probe_names}
+        count_grids: dict[str, Any] = {
+            name: np.zeros(grid_shape, dtype=np.uint32) for name in probe_names
+        }
 
         def coord_to_index(coord: NDArray) -> tuple[int, int, int] | None:
             idx = np.floor((coord - grid_origin) / spacing).astype(int)
@@ -1146,10 +1169,10 @@ class DensityAllHAAction(Action):
         spacing: float,
         subregion: Subregion | None,
         n_workers: int,
-    ) -> tuple[dict[str, np.memmap], int]:
+    ) -> tuple[dict[str, Any], int]:
         """Run all HA density calculation in parallel."""
         count_grids = {name: _create_memmap_grid(grid_shape) for name in probe_names}
-        frame_queue = Queue(maxsize=n_workers * 2)
+        frame_queue: Any = Queue(maxsize=n_workers * 2)
 
         workers = []
         for _ in range(n_workers):

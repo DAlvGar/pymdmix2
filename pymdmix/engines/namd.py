@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 log = logging.getLogger(__name__)
 
@@ -588,7 +589,7 @@ class NAMDWriter:
         if not settings:
             return ""
         if settings.restraint_mask:
-            return settings.restraint_mask
+            return str(settings.restraint_mask)
         mode = settings.restraint_mode.upper()
         if mode == "FREE":
             return ""
@@ -618,6 +619,10 @@ class NAMDWriter:
             self.log.warning("pdb_path not set/found; cannot write restraints.pdb")
             return None
 
+        if self.replica.path is None:
+            self.log.warning("replica.path not set; cannot write restraints.pdb")
+            return None
+
         out_path = self.replica.path / "restraints.pdb"
 
         try:
@@ -637,7 +642,7 @@ class NAMDWriter:
 
             struct.save(str(out_path), overwrite=True)
             self.log.debug(f"Wrote restraints.pdb → {out_path}")
-            return out_path
+            return cast(Path, out_path)
 
         except Exception as exc:
             self.log.warning(f"Could not write restraints.pdb: {exc}")

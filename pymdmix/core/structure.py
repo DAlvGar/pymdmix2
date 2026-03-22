@@ -331,12 +331,13 @@ def get_residue_mask(
     NDArray[np.bool_]
         Boolean mask (True for matching atoms)
     """
+    resname_set: set[str]
     if isinstance(resnames, str):
-        resnames = {resnames}
+        resname_set = {resnames}
     else:
-        resnames = set(resnames)
+        resname_set = set(resnames)
 
-    return np.array([a.residue.name in resnames for a in struct.atoms])
+    return np.array([a.residue.name in resname_set for a in struct.atoms])
 
 
 def get_atom_mask(
@@ -358,12 +359,13 @@ def get_atom_mask(
     NDArray[np.bool_]
         Boolean mask (True for matching atoms)
     """
+    atom_name_set: set[str]
     if isinstance(atom_names, str):
-        atom_names = {atom_names}
+        atom_name_set = {atom_names}
     else:
-        atom_names = set(atom_names)
+        atom_name_set = set(atom_names)
 
-    return np.array([a.name in atom_names for a in struct.atoms])
+    return np.array([a.name in atom_name_set for a in struct.atoms])
 
 
 def get_heavy_atom_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
@@ -738,7 +740,7 @@ def get_probe_coords(
     >>> coords = get_probe_coords(frame, 'ETA', 'O')
     """
     mask = get_residue_mask(struct, residue_name) & get_atom_mask(struct, atom_names)
-    return struct.coordinates[mask]
+    return struct.coordinates[mask]  # type: ignore[no-any-return]
 
 
 def iter_residue_coords(
@@ -815,7 +817,7 @@ def get_residue_com_coords(
 
             coms.append(com)
 
-    return np.array(coms) if coms else np.empty((0, 3))
+    return np.array(coms) if coms else np.empty((0, 3))  # type: ignore[no-any-return]
 
 
 def detect_solvent_type(
@@ -895,7 +897,7 @@ def _kabsch_rotation(P: NDArray, Q: NDArray) -> NDArray:
     # Optimal rotation
     R = Vt.T @ correction @ U.T
 
-    return R
+    return R  # type: ignore[no-any-return]
 
 
 def compute_rmsd(

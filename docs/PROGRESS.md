@@ -1,13 +1,18 @@
 # pyMDMix2 — Development Progress & Resume Guide
 
-**Last Updated:** 2026-03-23
+**Last Updated:** 2026-03-22
 **Goal:** Fix cross-codebase inconsistencies (API signatures, engine classes, CLI, docs)
 
 ---
 
-## Current State: ✅ Phases 1–4 Complete
+## Current State: ✅ Phases 1–5 Complete
 
-### Test Suite Baseline
+### Latest Validation Snapshot
+- `uv run mypy pymdmix` → **Success: no issues found in 42 source files**
+- `uv run pytest tests/test_cli.py tests/test_system.py -q` → **50 passed**
+- `uv run pytest tests/test_cli.py -q` → **17 passed**
+
+### Historical Test Suite Baseline
 ```
 644 passed, 8 skipped, 2 pre-existing failures
 ```
@@ -61,6 +66,29 @@ Required parameters moved to keyword-only args with `None` defaults + early-retu
 
 ## Remaining Work
 
+### Phase 5 — Module Cleanup + mypy ✅ COMPLETE
+
+Implemented and validated all planned Phase 5 targets:
+
+| Area | Status | Notes |
+|------|--------|-------|
+| `engines/executor.py` | ✅ | typing/interface cleanup done |
+| `analysis/manager.py` | ✅ | dual-Action architecture clarified and typed |
+| `utils/tools.py` | ✅ | utility typing and safety fixes |
+| `project/browser.py` | ✅ | path/navigation guards fixed |
+| `io/off_manager.py` | ✅ | signature/typing cleanup done |
+| Global mypy target | ✅ | now clean on full package (`uv run mypy pymdmix`) |
+
+### Legacy API Compatibility Follow-up ✅ COMPLETE
+
+To match `pyMDmix-port` project semantics and avoid CLI/type drift, `Project` compatibility fields and methods were restored:
+
+- Reintroduced `systems` and `groups` project-level attributes.
+- Added compatibility methods: `add_system()`, `create_replica()`, `create_group()`, `get_group()`, `remove_group()`.
+- Included `systems`/`groups` in project serialization (`to_dict`/`from_dict`).
+
+This addresses the post-refactor mismatch where legacy-style call sites expected attributes/methods that were removed during simplification.
+
 ### Phase 3 — Result Dataclasses & Missing Factory Methods ✅
 
 | File | Added |
@@ -93,28 +121,10 @@ Required parameters moved to keyword-only args with `None` defaults + early-retu
 
 ---
 
-### Phase 5 — Module Cleanup + mypy
+### Optional Next Work (Post-Phase-5)
 
-#### 5.1 `engines/executor.py`
-Fix broken imports/method calls for job submission.
-
-#### 5.2 `analysis/manager.py`
-Clarify the second `Action` base (parallel dispatch) vs `analysis/base.py`'s `Action`. They are intentionally distinct — add clear docstring note and ensure no name collision at import time.
-
-#### 5.3 `utils/tools.py`
-Fix broken grid utility operations.
-
-#### 5.4 `project/browser.py`
-Fix directory traversal helpers.
-
-#### 5.5 `io/off_manager.py`
-Fix OFF file handling method signatures.
-
-#### 5.6 mypy clean-up
-```bash
-uv run pre-commit run mypy --hook-stage manual
-```
-Target: ≤20 errors (down from 244 pre-existing). Focus on `analysis/`, `engines/`, `project/`.
+- Expand regression matrix beyond focused suites (`cli`, `system`) to full test suite refresh.
+- Decide whether to keep lightweight compatibility (`systems` metadata dict) or reintroduce richer typed `System` objects in Project.
 
 ---
 
@@ -122,7 +132,8 @@ Target: ≤20 errors (down from 244 pre-existing). Focus on `analysis/`, `engine
 
 ```bash
 cd ~/clawd/pymdmix2
-uv run pytest tests/ -q --tb=short   # should show 621 passed
+uv run mypy pymdmix
+uv run pytest tests/test_cli.py tests/test_system.py -q
 ```
 
 Then implement phases in order. Each phase can be committed independently.

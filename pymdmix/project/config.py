@@ -26,7 +26,7 @@ import logging
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ try:
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
-    yaml = None
+    yaml = cast(Any, None)
 
 
 @dataclass

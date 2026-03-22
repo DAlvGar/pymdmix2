@@ -95,8 +95,7 @@ def align_trajectory(
     trajectory = Path(trajectory)
     output = Path(output)
 
-    if reference:
-        reference = Path(reference)
+    reference_path: Path | None = Path(reference) if reference else None
 
     # Auto-select method
     if method == "auto":
@@ -107,9 +106,11 @@ def align_trajectory(
             method = "mdanalysis"
 
     if method == "cpptraj":
-        return _align_cpptraj(topology, trajectory, output, reference, mask, start, stop, step)
+        return _align_cpptraj(topology, trajectory, output, reference_path, mask, start, stop, step)
     else:
-        return _align_mdanalysis(topology, trajectory, output, reference, mask, start, stop, step)
+        return _align_mdanalysis(
+            topology, trajectory, output, reference_path, mask, start, stop, step
+        )
 
 
 def _align_mdanalysis(
@@ -334,6 +335,9 @@ def align_replica(
     # Use replica's reference if not provided
     if reference is None:
         reference = replica.reference
+
+    if replica.path is None:
+        raise ValueError("Replica has no path")
 
     # Build output path
     traj_path = replica.path / replica.trajectory

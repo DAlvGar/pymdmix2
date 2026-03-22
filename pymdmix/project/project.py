@@ -66,6 +66,8 @@ class Project:
     path: Path
     config: Config = field(default_factory=Config)
     replicas: list[Replica] = field(default_factory=list)
+    systems: dict[str, dict[str, Any]] = field(default_factory=dict)
+    groups: dict[str, list[str]] = field(default_factory=dict)
     pdb_file: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     modified_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -123,6 +125,91 @@ class Project:
         self.replicas.append(replica)
         self._update_modified()
         log.info(f"Added replica: {replica.name}")
+
+    # ---------------------------------------------------------------------
+    # Legacy compatibility helpers
+    # ---------------------------------------------------------------------
+
+    def add_system(self, system_config: Any) -> None:
+        """Register a system configuration in the project.
+
+        Compatibility method for legacy call sites that used a richer
+        `Project.systems` model.
+        """
+        name = getattr(system_config, "name", None)
+        input_file = getattr(system_config, "input_file", None)
+
+        if not isinstance(name, str) or not name:
+            raise ValueError("System config must provide a non-empty 'name'")
+        if input_file is None:
+            raise ValueError("System config must provide 'input_file'")
+
+        self.systems[name] = {
+            "name": name,
+            "input_file": str(Path(input_file)),
+            "unit_name": getattr(system_config, "unit_name", None),
+            "extra_residues": getattr(system_config, "extra_residues", None),
+            "extra_forcefields": getattr(system_config, "extra_forcefields", None),
+        }
+        self._update_modified()
+
+    def create_replica(self, replica_config: Any) -> Replica:
+        """Create one replica from a replica config object.
+
+        Compatibility method mirroring legacy-style project APIs.
+        """
+        solvent = getattr(replica_config, "solvent", None)
+        if not isinstance(solvent, str) or not solvent:
+            raise ValueError("Replica config must provide a non-empty 'solvent'")
+
+        created = self.add_replicas(solvent=solvent, n_replicas=1)
+        replica = created[0]
+
+        if replica.settings:
+            replica.settings.nanos = int(getattr(replica_config, "nanos", replica.settings.nanos))
+
+            restraint_mode = getattr(
+                replica_config, "restraint_mode", replica.settings.restraint_mode
+            )
+            if isinstance(restraint_mode, str):
+                replica.settings.restraint_mode = restraint_mode
+
+            restraint_mask = getattr(replica_config, "restraint_mask", None)
+            if isinstance(restraint_mask, str) and restraint_mask:
+                replica.settings.restraint_mask = restraint_mask
+
+            restraint_force = getattr(
+                replica_config, "restraint_force", replica.settings.restraint_force
+            )
+            replica.settings.restraint_force = float(restraint_force)
+
+            align_mask = getattr(replica_config, "align_mask", None)
+            if isinstance(align_mask, str) and align_mask:
+                replica.settings.align_mask = align_mask
+
+        self._update_modified()
+        return replica
+
+    def create_group(self, name: str, replica_names: list[str]) -> None:
+        """Create or overwrite a named replica group."""
+        known = {r.name for r in self.replicas}
+        missing = [n for n in replica_names if n not in known]
+        if missing:
+            raise ValueError(f"Unknown replica(s): {', '.join(missing)}")
+        self.groups[name] = list(replica_names)
+        self._update_modified()
+
+    def get_group(self, name: str) -> list[str]:
+        """Get replica names from a named group."""
+        return list(self.groups.get(name, []))
+
+    def remove_group(self, name: str) -> bool:
+        """Remove a named group if present."""
+        if name in self.groups:
+            del self.groups[name]
+            self._update_modified()
+            return True
+        return False
 
     def add_replicas(
         self,
@@ -220,7 +307,9 @@ class Project:
         return {
             "name": self.name,
             "path": str(self.path),
+            "n_systems": len(self.systems),
             "n_replicas": self.n_replicas,
+            "n_groups": len(self.groups),
             "solvents": self.solvents,
             "states": state_counts,
             "created_at": self.created_at,
@@ -234,7 +323,9 @@ class Project:
         lines = [
             f"Project: {status['name']}",
             f"Path: {status['path']}",
+            f"Systems: {status['n_systems']}",
             f"Replicas: {status['n_replicas']}",
+            f"Groups: {status['n_groups']}",
             f"Solvents: {', '.join(status['solvents']) or 'None'}",
             "",
             "State Summary:",
@@ -252,6 +343,8 @@ class Project:
             "path": str(self.path),
             "config": self.config.to_dict(),
             "replicas": [r.to_dict() for r in self.replicas],
+            "systems": self.systems,
+            "groups": self.groups,
             "pdb_file": self.pdb_file,
             "created_at": self.created_at,
             "modified_at": self.modified_at,
@@ -263,11 +356,13 @@ class Project:
         config = Config.from_dict(data.pop("config", {}))
         replicas_data = data.pop("replicas", [])
         replicas = [Replica.from_dict(r) for r in replicas_data]
+        systems = data.pop("systems", {})
+        groups = data.pop("groups", {})
 
         if "path" in data:
             data["path"] = Path(data["path"])
 
-        return cls(config=config, replicas=replicas, **data)
+        return cls(config=config, replicas=replicas, systems=systems, groups=groups, **data)
 
     def save(self, path: Path | None = None) -> None:
         """

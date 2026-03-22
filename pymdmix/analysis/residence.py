@@ -38,6 +38,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from multiprocessing import Lock, Manager, Process, Queue
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -120,8 +121,8 @@ class ResidenceWorker(Process):
         index_to_resid: dict[int, int],
         resid_to_resname: dict[int, str],
         track_residues: list[str] | None,
-        results: dict,  # Manager.dict
-        lock: Lock,
+        results: Any,  # Manager.dict
+        lock: Any,
     ):
         super().__init__()
         self.frame_queue = frame_queue
@@ -269,7 +270,9 @@ class ResidenceAction(Action):
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        hotspot_coords = [tuple(c) for c in hotspot_coords]
+        hotspot_coords = [
+            cast(tuple[float, float, float], tuple(float(v) for v in c)) for c in hotspot_coords
+        ]
         n_hotspots = len(hotspot_coords)
 
         self.log.info(f"Analyzing residence at {n_hotspots} hotspots")
@@ -418,7 +421,7 @@ class ResidenceAction(Action):
 
             # Build resname to resid map for output
             f.write("# RESNAME-RESID MAP\n")
-            all_resids = set()
+            all_resids: set[int] = set()
             for r in results:
                 all_resids.update(r.residue_counts.keys())
             resname_to_resids: dict[str, list[int]] = {}
@@ -552,7 +555,7 @@ class ResidenceAction(Action):
         manager = Manager()
         results = manager.dict()
         lock = Lock()
-        frame_queue = Queue(maxsize=n_workers * 2)
+        frame_queue: Any = Queue(maxsize=n_workers * 2)
 
         # Create workers
         workers = []
@@ -599,7 +602,7 @@ class ResidenceAction(Action):
         if not hotspot_coords:
             errors.append("hotspot_coords is required")
 
-        return errors
+        return cast(list[str], errors)
 
 
 def calculate_residence(
@@ -612,7 +615,7 @@ def calculate_residence(
     track_residues: list[str] | None = None,
     non_hydrogen_mask: NDArray[np.bool_] | None = None,
     n_workers: int = 1,
-) -> list[ResidenceResult]:
+) -> ActionResult:
     """
     Convenience function to calculate residence times.
 
@@ -639,8 +642,8 @@ def calculate_residence(
 
     Returns
     -------
-    list[ResidenceResult]
-        Results for each hotspot
+    ActionResult
+        Residence analysis action result
     """
     action = ResidenceAction()
     result = action.run(

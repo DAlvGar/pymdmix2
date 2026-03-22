@@ -158,8 +158,8 @@ class Residue:
             Center coordinates (x, y, z).
         """
         if len(self.xyz) == 0:
-            return np.array([0.0, 0.0, 0.0])
-        return self.xyz.mean(axis=0)
+            return np.array([0.0, 0.0, 0.0])  # type: ignore[no-any-return]
+        return self.xyz.mean(axis=0)  # type: ignore[no-any-return]
 
     def set_xyz(self, xyz: np.ndarray) -> bool:
         """

@@ -162,6 +162,7 @@ class DCDReader:
 
     def _read_header(self) -> None:
         """Read and parse DCD header."""
+        assert self._file is not None, "DCD file not open"
         f = self._file
         if f.tell() != 0:
             f.seek(0)
@@ -229,20 +230,24 @@ class DCDReader:
     @property
     def header(self) -> DCDHeader:
         """DCD header information."""
+        assert self._header is not None, "DCD header not read"
         return self._header
 
     @property
     def n_frames(self) -> int:
         """Number of frames."""
+        assert self._header is not None, "DCD header not read"
         return self._header.n_frames
 
     @property
     def n_atoms(self) -> int:
         """Number of atoms."""
+        assert self._header is not None, "DCD header not read"
         return self._header.n_atoms
 
     def _read_extra_block(self) -> NDArray[np.float64]:
         """Read CHARMM extra block with unit cell information."""
+        assert self._file is not None, "DCD file not open"
         f = self._file
         block_size = struct.unpack(">I", f.read(4))[0]
         if block_size != 48:
@@ -254,6 +259,8 @@ class DCDReader:
 
     def _read_frame(self) -> DCDFrame:
         """Read a single frame at current file position."""
+        assert self._file is not None, "DCD file not open"
+        assert self._header is not None, "DCD header not read"
         f = self._file
 
         # Read unit cell if present
@@ -286,6 +293,8 @@ class DCDReader:
         NDArray[np.float32]
             Coordinates array with shape (n_frames, n_atoms, 3)
         """
+        assert self._file is not None, "DCD file not open"
+        assert self._header is not None, "DCD header not read"
         f = self._file
         f.seek(self._header.header_size)
 
@@ -311,6 +320,8 @@ class DCDReader:
         DCDFrame
             Frame data
         """
+        assert self._header is not None, "DCD header not read"
+        assert self._file is not None, "DCD file not open"
         if index < 0 or index >= self._header.n_frames:
             raise IndexError(f"Frame index {index} out of range [0, {self._header.n_frames})")
 
@@ -326,12 +337,15 @@ class DCDReader:
 
     def __iter__(self) -> Iterator[DCDFrame]:
         """Iterate over all frames."""
+        assert self._file is not None, "DCD file not open"
+        assert self._header is not None, "DCD header not read"
         self._file.seek(self._header.header_size)
         for _ in range(self._header.n_frames):
             yield self._read_frame()
 
     def __len__(self) -> int:
         """Number of frames."""
+        assert self._header is not None, "DCD header not read"
         return self._header.n_frames
 
     def __enter__(self) -> DCDReader:

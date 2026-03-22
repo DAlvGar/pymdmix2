@@ -88,13 +88,15 @@ def plot_energy_grid(
     if not isinstance(grid, Grid):
         raise TypeError(f"Expected Grid, got {type(grid)}")
 
+    sp = grid.spacing_tuple
+
     # Determine slice position
     if level is None:
         # Middle of the grid
         idx = grid.shape[axis] // 2
     else:
         # Convert Angstrom to index
-        idx = int((level - grid.origin[axis]) / grid.spacing[axis])
+        idx = int((level - grid.origin[axis]) / sp[axis])
         idx = max(0, min(idx, grid.shape[axis] - 1))
 
     # Extract slice
@@ -103,9 +105,9 @@ def plot_energy_grid(
         xlabel, ylabel = "Y (Å)", "Z (Å)"
         extent = [
             grid.origin[1],
-            grid.origin[1] + grid.shape[1] * grid.spacing[1],
+            grid.origin[1] + grid.shape[1] * sp[1],
             grid.origin[2],
-            grid.origin[2] + grid.shape[2] * grid.spacing[2],
+            grid.origin[2] + grid.shape[2] * sp[2],
         ]
         axis_label = "X"
     elif axis == 1:
@@ -113,9 +115,9 @@ def plot_energy_grid(
         xlabel, ylabel = "X (Å)", "Z (Å)"
         extent = [
             grid.origin[0],
-            grid.origin[0] + grid.shape[0] * grid.spacing[0],
+            grid.origin[0] + grid.shape[0] * sp[0],
             grid.origin[2],
-            grid.origin[2] + grid.shape[2] * grid.spacing[2],
+            grid.origin[2] + grid.shape[2] * sp[2],
         ]
         axis_label = "Y"
     else:  # axis == 2
@@ -123,9 +125,9 @@ def plot_energy_grid(
         xlabel, ylabel = "X (Å)", "Y (Å)"
         extent = [
             grid.origin[0],
-            grid.origin[0] + grid.shape[0] * grid.spacing[0],
+            grid.origin[0] + grid.shape[0] * sp[0],
             grid.origin[1],
-            grid.origin[1] + grid.shape[1] * grid.spacing[1],
+            grid.origin[1] + grid.shape[1] * sp[1],
         ]
         axis_label = "Z"
 
@@ -153,7 +155,7 @@ def plot_energy_grid(
     if title:
         ax.set_title(title)
     else:
-        pos = grid.origin[axis] + idx * grid.spacing[axis]
+        pos = grid.origin[axis] + idx * sp[axis]
         ax.set_title(f"{axis_label} = {pos:.1f} Å")
 
     fig.tight_layout()
@@ -161,7 +163,7 @@ def plot_energy_grid(
     if output:
         fig.savefig(output, dpi=150, bbox_inches="tight")
 
-    return fig
+    return fig  # type: ignore[no-any-return]
 
 
 def plot_energy_projection(
@@ -207,33 +209,35 @@ def plot_energy_projection(
     else:
         raise ValueError(f"Unknown projection method: {method}")
 
+    sp = grid.spacing_tuple
+
     # Setup axes
     if axis == 0:
         proj = proj.T
         xlabel, ylabel = "Y (Å)", "Z (Å)"
         extent = [
             grid.origin[1],
-            grid.origin[1] + grid.shape[1] * grid.spacing[1],
+            grid.origin[1] + grid.shape[1] * sp[1],
             grid.origin[2],
-            grid.origin[2] + grid.shape[2] * grid.spacing[2],
+            grid.origin[2] + grid.shape[2] * sp[2],
         ]
     elif axis == 1:
         proj = proj.T
         xlabel, ylabel = "X (Å)", "Z (Å)"
         extent = [
             grid.origin[0],
-            grid.origin[0] + grid.shape[0] * grid.spacing[0],
+            grid.origin[0] + grid.shape[0] * sp[0],
             grid.origin[2],
-            grid.origin[2] + grid.shape[2] * grid.spacing[2],
+            grid.origin[2] + grid.shape[2] * sp[2],
         ]
     else:
         proj = proj.T
         xlabel, ylabel = "X (Å)", "Y (Å)"
         extent = [
             grid.origin[0],
-            grid.origin[0] + grid.shape[0] * grid.spacing[0],
+            grid.origin[0] + grid.shape[0] * sp[0],
             grid.origin[1],
-            grid.origin[1] + grid.shape[1] * grid.spacing[1],
+            grid.origin[1] + grid.shape[1] * sp[1],
         ]
 
     fig, ax = plt.subplots(figsize=figsize)
@@ -265,7 +269,7 @@ def plot_energy_projection(
     if output:
         fig.savefig(output, dpi=150, bbox_inches="tight")
 
-    return fig
+    return fig  # type: ignore[no-any-return]
 
 
 # =============================================================================
@@ -357,7 +361,7 @@ def plot_convergence(
     if output:
         fig.savefig(output, dpi=150, bbox_inches="tight")
 
-    return fig
+    return fig  # type: ignore[no-any-return]
 
 
 def plot_rmsd(
@@ -415,7 +419,7 @@ def plot_rmsd(
     if output:
         fig.savefig(output, dpi=150, bbox_inches="tight")
 
-    return fig
+    return fig  # type: ignore[no-any-return]
 
 
 # =============================================================================
@@ -467,7 +471,7 @@ def plot_hotspot_energies(
     if output:
         fig.savefig(output, dpi=150, bbox_inches="tight")
 
-    return fig
+    return fig  # type: ignore[no-any-return]
 
 
 def plot_probe_distribution(
@@ -517,7 +521,7 @@ def plot_probe_distribution(
     if output:
         fig.savefig(output, dpi=150, bbox_inches="tight")
 
-    return fig
+    return fig  # type: ignore[no-any-return]
 
 
 def plot_replica_rmsd(

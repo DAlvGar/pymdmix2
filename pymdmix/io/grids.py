@@ -15,6 +15,7 @@ import struct
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -203,7 +204,7 @@ def read_mrc(path: str | Path) -> Grid:
 
         # Create Grid using dataclass directly
         grid = Grid(
-            data=data,
+            data=data.astype(np.float64),
             origin=(ox, oy, oz),
             spacing=spacing,
         )
@@ -364,7 +365,7 @@ def grid_info(path: str | Path) -> dict:
     if fmt == GridFormat.DX:
         # Parse DX header
         with open(path) as f:
-            info = {"format": "DX"}
+            info: dict[str, Any] = {"format": "DX"}
             for line in f:
                 if line.startswith("#"):
                     continue

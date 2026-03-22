@@ -15,10 +15,46 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Literal, cast
 
 import click
 
 from pymdmix import __version__
+
+
+def _groups_file(project_path: Path) -> Path:
+    """Get path to CLI groups file for a project."""
+    return project_path / "groups.json"
+
+
+def _load_groups(project_path: Path) -> dict[str, list[str]]:
+    """Load named replica groups for a project."""
+    import json
+
+    path = _groups_file(project_path)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+
+    groups: dict[str, list[str]] = {}
+    for name, members in data.items():
+        if isinstance(name, str) and isinstance(members, list):
+            valid_members = [m for m in members if isinstance(m, str)]
+            groups[name] = valid_members
+    return groups
+
+
+def _save_groups(project_path: Path, groups: dict[str, list[str]]) -> None:
+    """Persist named replica groups for a project."""
+    import json
+
+    _groups_file(project_path).write_text(json.dumps(groups, indent=2))
+
 
 # =============================================================================
 # CLI Group
@@ -197,11 +233,15 @@ def add_system(ctx: click.Context, config: str, project: str) -> None:
         click.echo(f"  System name: {system_config.name}")
         click.echo(f"  Input file: {system_config.input_file}")
 
-    # Add system to project
-    proj.add_system(system_config)
+    # Store config in project input folder for later use
+    proj.create_directories()
+    destination = proj.input_path / Path(config).name
+    destination.write_text(Path(config).read_text())
+    # Keep a default pdb/off pointer if available
+    proj.pdb_file = str(system_config.input_file)
     proj.save()
 
-    click.secho(f"✓ System '{system_config.name}' added to project", fg="green")
+    click.secho(f"✓ System '{system_config.name}' registered in project inputs", fg="green")
 
 
 @add.command("replica")
@@ -254,20 +294,27 @@ def add_replica(ctx: click.Context, config: str, project: str, count: int) -> No
         click.echo(f"  Nanoseconds: {replica_config.nanos}")
 
     # Create replica(s)
-    created = []
-    for i in range(count):
-        replica = proj.create_replica(replica_config)
-        created.append(replica.name)
+    created = proj.add_replicas(solvent=replica_config.solvent, n_replicas=count)
+    created_names = [r.name for r in created]
+    for replica in created:
+        if replica.settings:
+            replica.settings.nanos = replica_config.nanos
+            replica.settings.restraint_mode = replica_config.restraint_mode
+            if replica_config.restraint_mask:
+                replica.settings.restraint_mask = replica_config.restraint_mask
+            replica.settings.restraint_force = replica_config.restraint_force
+            if replica_config.align_mask:
+                replica.settings.align_mask = replica_config.align_mask
         if verbose:
             click.echo(f"  Created: {replica.name}")
 
     proj.save()
 
     if count == 1:
-        click.secho(f"✓ Replica '{created[0]}' added to project", fg="green")
+        click.secho(f"✓ Replica '{created_names[0]}' added to project", fg="green")
     else:
         click.secho(f"✓ {count} replicas added to project", fg="green")
-        for name in created:
+        for name in created_names:
             click.echo(f"    - {name}")
 
 
@@ -295,13 +342,15 @@ def add_group(ctx: click.Context, name: str, selection: tuple, project: str) -> 
     proj = Project.load(project_path)
 
     # Verify all replicas exist
+    replica_names = {rep.name for rep in proj.replicas}
     for rep_name in selection:
-        if rep_name not in proj.replicas:
+        if rep_name not in replica_names:
             click.secho(f"✗ Replica not found: {rep_name}", fg="red")
             sys.exit(1)
 
-    # Create group
-    proj.create_group(name, list(selection))
+    groups = _load_groups(proj.path)
+    groups[name] = [str(s) for s in selection]
+    _save_groups(proj.path, groups)
     proj.save()
 
     click.secho(f"✓ Group '{name}' created with {len(selection)} replica(s)", fg="green")
@@ -425,19 +474,21 @@ def parse_selection(selection_type: str, selection: tuple, project_path: Path):
     proj = Project.load(project_path)
 
     if selection_type == "all":
-        return list(proj.replicas.values()), proj
+        return list(proj.replicas), proj
     elif selection_type == "bysolvent":
-        replicas = [r for r in proj.replicas.values() if r.solvent in selection]
+        wanted = {str(s) for s in selection}
+        replicas = [r for r in proj.replicas if r.solvent in wanted]
         return replicas, proj
     elif selection_type == "byname":
-        replicas = [proj.get_replica(name) for name in selection]
+        replicas = [rep for name in selection if (rep := proj.get_replica(str(name))) is not None]
         return replicas, proj
     elif selection_type == "group":
         if len(selection) != 1:
             raise click.UsageError("Group selection requires exactly one group name")
-        group_name = selection[0]
-        replica_names = proj.get_group(group_name)
-        replicas = [proj.get_replica(name) for name in replica_names]
+        group_name = str(selection[0])
+        groups = _load_groups(project_path)
+        replica_names = groups.get(group_name, [])
+        replicas = [rep for name in replica_names if (rep := proj.get_replica(name)) is not None]
         return replicas, proj
     else:
         raise click.UsageError(f"Unknown selection type: {selection_type}")
@@ -888,22 +939,26 @@ def info_project(ctx: click.Context, project: str) -> None:
     project_path = Path(project)
     proj = Project.load(project_path)
 
+    groups = _load_groups(proj.path)
+    n_systems = len(list(proj.input_path.glob("*.cfg"))) + len(list(proj.input_path.glob("*.toml")))
+
     click.echo(f"Project: {proj.name}")
     click.echo(f"  Path: {proj.path}")
-    click.echo(f"  Systems: {len(proj.systems)}")
+    click.echo(f"  Systems: {n_systems}")
     click.echo(f"  Replicas: {len(proj.replicas)}")
-    click.echo(f"  Groups: {len(proj.groups)}")
+    click.echo(f"  Groups: {len(groups)}")
 
-    if proj.systems:
+    if n_systems:
         click.echo("\nSystems:")
-        for name in proj.systems:
-            click.echo(f"  - {name}")
+        for cfg in sorted(proj.input_path.glob("*")):
+            if cfg.suffix in {".cfg", ".toml", ".yaml", ".yml", ".json"}:
+                click.echo(f"  - {cfg.name}")
 
     if proj.replicas:
         click.echo("\nReplicas:")
-        for name, rep in proj.replicas.items():
-            status = getattr(rep.status, "value", str(rep.status))
-            click.echo(f"  - {name}: {rep.solvent} ({status})")
+        for rep in proj.replicas:
+            status = rep.state.name
+            click.echo(f"  - {rep.name}: {rep.solvent} ({status})")
 
 
 @info.command("systems")
@@ -924,17 +979,21 @@ def info_systems(ctx: click.Context, project: str, detailed: bool) -> None:
     project_path = Path(project)
     proj = Project.load(project_path)
 
-    if not proj.systems:
+    configs = [
+        p
+        for p in sorted(proj.input_path.glob("*"))
+        if p.suffix in {".cfg", ".toml", ".yaml", ".yml", ".json"}
+    ]
+
+    if not configs:
         click.echo("No systems in project")
         return
 
-    click.echo(f"Systems ({len(proj.systems)}):")
-    for name, system in proj.systems.items():
-        click.echo(f"  {name}")
+    click.echo(f"Systems ({len(configs)}):")
+    for cfg in configs:
+        click.echo(f"  {cfg.name}")
         if detailed:
-            click.echo(f"    Input: {system.input_file}")
-            if system.extra_residues:
-                click.echo(f"    Extra residues: {', '.join(system.extra_residues)}")
+            click.echo(f"    Path: {cfg}")
 
 
 @info.command("replicas")
@@ -960,13 +1019,14 @@ def info_replicas(ctx: click.Context, project: str, detailed: bool) -> None:
         return
 
     click.echo(f"Replicas ({len(proj.replicas)}):")
-    for name, rep in proj.replicas.items():
-        status = getattr(rep.status, "value", str(rep.status))
-        click.echo(f"  {name}: {rep.solvent} ({status})")
+    for rep in proj.replicas:
+        status = rep.state.name
+        click.echo(f"  {rep.name}: {rep.solvent} ({status})")
         if detailed:
-            click.echo(f"    System: {rep.system}")
-            click.echo(f"    Nanoseconds: {rep.nanos}")
-            click.echo(f"    Restraints: {rep.restraint_mode}")
+            click.echo(f"    Path: {rep.path}")
+            if rep.settings:
+                click.echo(f"    Nanoseconds: {rep.settings.nanos}")
+                click.echo(f"    Restraints: {rep.settings.restraint_mode}")
 
 
 @info.command("solvents")
@@ -988,6 +1048,9 @@ def info_solvents(ctx: click.Context, detailed: bool) -> None:
     for name in sorted(solvents):
         try:
             s = library.get(name)
+            if s is None:
+                click.echo(f"  {name:8s} - (missing definition)")
+                continue
             click.echo(f"  {name:8s} - {s.full_name}")
             if detailed:
                 probes = [p.name for p in s.probes]
@@ -1022,9 +1085,10 @@ def info_settings(
         settings = MDSettings.from_toml(config_file)
         click.echo(f"Settings from: {config_file}")
     else:
+        mode = cast(Literal["FREE", "BB", "HA", "CUSTOM"], restraints)
         settings = MDSettings(
             solvent=solvent,
-            restraint_mode=restraints,
+            restraint_mode=mode,
             nanos=nanos,
         )
         click.echo("Default settings (customize with options or -f):")
@@ -1054,13 +1118,19 @@ def info_analysis(ctx: click.Context, replica_name: str, project: str) -> None:
     proj = Project.load(project_path)
 
     replica = proj.get_replica(replica_name)
+    if replica is None:
+        click.secho(f"✗ Replica not found: {replica_name}", fg="red")
+        sys.exit(1)
 
     click.echo(f"Replica: {replica.name}")
     click.echo(f"  Solvent: {replica.solvent}")
-    click.echo(f"  Status: {replica.status}")
+    click.echo(f"  Status: {replica.state.name}")
 
     # Check for analysis outputs
-    replica_path = proj.path / replica.name
+    if replica.path is None:
+        click.echo("  Replica path is not configured")
+        return
+    replica_path = replica.path
 
     align_path = replica_path / "align"
     grids_path = replica_path / "grids"
@@ -1355,7 +1425,8 @@ def remove(ctx: click.Context, project: str, group: str | None, force: bool) -> 
     proj = Project.load(project_path)
 
     if group:
-        if group not in proj.groups:
+        groups = _load_groups(proj.path)
+        if group not in groups:
             click.secho(f"✗ Group not found: {group}", fg="red")
             sys.exit(1)
 
@@ -1364,7 +1435,8 @@ def remove(ctx: click.Context, project: str, group: str | None, force: bool) -> 
                 click.echo("Aborted")
                 return
 
-        proj.remove_group(group)
+        del groups[group]
+        _save_groups(proj.path, groups)
         proj.save()
         click.secho(f"✓ Group '{group}' removed", fg="green")
     else:
@@ -1495,9 +1567,8 @@ def tools_grid_info(grid_file: str) -> None:
 
     click.echo(f"File: {grid_file}")
     click.echo(f"  Dimensions: {grid.shape[0]} x {grid.shape[1]} x {grid.shape[2]}")
-    click.echo(
-        f"  Spacing: {grid.spacing[0]:.2f} x {grid.spacing[1]:.2f} x {grid.spacing[2]:.2f} Å"
-    )
+    sp = grid.spacing_tuple
+    click.echo(f"  Spacing: {sp[0]:.2f} x {sp[1]:.2f} x {sp[2]:.2f} Å")
     click.echo(f"  Origin: ({grid.origin[0]:.2f}, {grid.origin[1]:.2f}, {grid.origin[2]:.2f})")
     click.echo(f"  Value range: [{grid.data.min():.3f}, {grid.data.max():.3f}]")
 
@@ -1516,6 +1587,7 @@ def tools_grid_math(operation: str, inputs: tuple, output: str, factor: float) -
         pymdmix tools grid-math scale grid.dx -f 0.5 -o scaled.dx
     """
     import numpy as np
+    from numpy.typing import NDArray
 
     from pymdmix.core.grid import Grid
 
@@ -1525,8 +1597,9 @@ def tools_grid_math(operation: str, inputs: tuple, output: str, factor: float) -
 
     grids = [Grid.read_dx(f) for f in inputs]
 
+    data: NDArray[np.float64]
     if operation == "add":
-        data = sum(g.data for g in grids)
+        data = np.sum(np.stack([g.data for g in grids], axis=0), axis=0)
     elif operation == "sub":
         data = grids[0].data - sum(g.data for g in grids[1:])
     elif operation == "min":
@@ -1561,9 +1634,10 @@ def tools_convert(input_file: str, output: str, fmt: str | None) -> None:
     Examples:
         pymdmix tools convert energy.dx -o energy.mrc
     """
-    from pymdmix.io.grids import convert_grid
+    from pymdmix.io.grids import GridFormat, convert_grid
 
-    convert_grid(input_file, output, format=fmt)
+    output_format = GridFormat(fmt) if fmt is not None else None
+    convert_grid(input_file, output, output_format=output_format)
     click.secho(f"✓ Converted: {input_file} → {output}", fg="green")
 
 
@@ -1577,13 +1651,39 @@ def tools_combine_hotspots(inputs: tuple, output: str, distance: float) -> None:
     Examples:
         pymdmix tools combine-hotspots rep1/hotspots.pdb rep2/hotspots.pdb -o combined.pdb
     """
-    from pymdmix.analysis.hotspots import merge_hotspot_files
+    import json
+
+    import numpy as np
+
+    from pymdmix.analysis.hotspots import Hotspot, HotSpotSet
 
     if len(inputs) < 2:
         click.secho("✗ At least two input files required", fg="red")
         sys.exit(1)
 
-    merge_hotspot_files(list(inputs), output, distance_cutoff=distance)
+    merged: list[Hotspot] = []
+    next_id = 1
+    for input_path in inputs:
+        with open(input_path) as f:
+            data = json.load(f)
+        for h in data.get("hotspots", []):
+            merged.append(
+                Hotspot(
+                    id=next_id,
+                    probe=h.get("probe", "UNK"),
+                    centroid=tuple(h["centroid"]),
+                    energy=float(h["energy"]),
+                    volume=float(h["volume"]),
+                    n_points=int(h["n_points"]),
+                    coords=np.array(h.get("coords", [h["centroid"]])),
+                    energies=np.array(h.get("energies", [h["energy"]])),
+                )
+            )
+            next_id += 1
+
+    hs_set = HotSpotSet(probe="MIXED", name="combined", hotspots=merged)
+    hs_set = hs_set.get_cluster_representatives(cutoff=distance)
+    hs_set.to_pdb(output)
     click.secho(f"✓ Combined {len(inputs)} files → {output}", fg="green")
 
 

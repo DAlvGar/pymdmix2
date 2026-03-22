@@ -97,6 +97,7 @@ class Job:
 
     def _execute_command(self) -> JobResult:
         """Execute shell command."""
+        assert self.command is not None, "Job has no command"
         try:
             result = subprocess.run(
                 self.command,
@@ -121,6 +122,7 @@ class Job:
 
     def _execute_function(self) -> JobResult:
         """Execute Python function."""
+        assert self.function is not None, "Job has no function"
         try:
             result = self.function(*self.args, **self.kwargs)
             return JobResult(success=True, output=str(result))
@@ -425,6 +427,7 @@ class AsyncExecutor:
         """Submit a shell command."""
         if self._pool is None:
             self.start()
+        assert self._pool is not None
 
         job = Job(command=command, cwd=Path(path) if path else None)
         return self._pool.submit(job.execute)
@@ -438,6 +441,7 @@ class AsyncExecutor:
         """Submit a function call."""
         if self._pool is None:
             self.start()
+        assert self._pool is not None
 
         return self._pool.submit(func, *args, **kwargs)
 

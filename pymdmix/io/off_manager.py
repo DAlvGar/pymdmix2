@@ -137,7 +137,7 @@ class Residue:
         """Get center of mass of the residue."""
         if self.xyz is None or len(self.xyz) == 0:
             return None
-        return self.xyz.mean(axis=0)
+        return self.xyz.mean(axis=0)  # type: ignore[no-any-return]
 
     def set_xyz(self, xyz: np.ndarray) -> bool:
         """
@@ -317,7 +317,7 @@ class OFFManager:
         """
         positions = self.read_off_section(unit, "positions")
         xyz = np.array([line.split() for line in positions], dtype=np.float32)
-        return xyz
+        return xyz  # type: ignore[no-any-return]
 
     def get_connectivity(self, unit: str) -> list[tuple[int, int]]:
         """
@@ -453,7 +453,7 @@ class OFFManager:
             True if it's a parameter unit
         """
         matches = self._find(f"!entry.{unit}.")
-        if matches:
+        if isinstance(matches, list) and matches:
             return "parm" in matches[0]
         return False
 

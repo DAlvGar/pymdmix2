@@ -24,7 +24,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -38,7 +38,7 @@ try:
     HAS_MDANALYSIS = True
 except ImportError:
     HAS_MDANALYSIS = False
-    mda = None
+    mda = cast(Any, None)
 
 try:
     import netCDF4
@@ -46,7 +46,7 @@ try:
     HAS_NETCDF4 = True
 except ImportError:
     HAS_NETCDF4 = False
-    netCDF4 = None
+    netCDF4 = cast(Any, None)
 
 
 @dataclass
@@ -71,7 +71,7 @@ class Frame:
     @property
     def n_atoms(self) -> int:
         """Number of atoms in frame."""
-        return self.coordinates.shape[0]
+        return int(self.coordinates.shape[0])
 
 
 @runtime_checkable
@@ -202,7 +202,7 @@ class MDAnalysisReader(BaseTrajectoryReader):
         --------
         >>> indices = reader.select_atoms("resname WAT and name O")
         """
-        return self._universe.select_atoms(selection).indices
+        return self._universe.select_atoms(selection).indices.astype(np.int64)  # type: ignore[no-any-return]
 
     @property
     def universe(self):

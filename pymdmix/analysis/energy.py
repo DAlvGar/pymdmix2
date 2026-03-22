@@ -155,12 +155,12 @@ def boltzmann_average(
     # Validate compatible shapes
     ref_shape = loaded_grids[0].shape
     ref_origin = loaded_grids[0].origin
-    ref_spacing = loaded_grids[0].spacing
+    ref_spacing = np.array(loaded_grids[0].spacing_tuple, dtype=np.float64)
 
     for i, g in enumerate(loaded_grids[1:], 2):
         if g.shape != ref_shape:
             raise ValueError(f"Grid {i} shape {g.shape} != reference {ref_shape}")
-        if abs(g.spacing - ref_spacing) > 1e-6:
+        if not np.allclose(np.array(g.spacing_tuple, dtype=np.float64), ref_spacing, atol=1e-6):
             raise ValueError(f"Grid {i} spacing {g.spacing} != reference {ref_spacing}")
 
     # Set weights
@@ -187,7 +187,7 @@ def boltzmann_average(
     return Grid(
         data=avg_data,
         origin=ref_origin,
-        spacing=ref_spacing,
+        spacing=loaded_grids[0].spacing,
     )
 
 
@@ -238,7 +238,7 @@ def _boltzmann_average_energy(
     log_avg = max_val + np.log(exp_sum)
     avg_energy = -RT * log_avg
 
-    return avg_energy
+    return avg_energy  # type: ignore[no-any-return]
 
 
 def calculate_expected_density(

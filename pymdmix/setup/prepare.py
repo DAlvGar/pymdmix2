@@ -33,6 +33,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import parmed
@@ -359,11 +360,11 @@ class PDB2PQRInterface:
             raise ConnectionError(f"Failed to submit job: {e}")
 
         # Parse job ID from response
-        result = response.json()
+        result = cast(dict[str, Any], response.json())
         if "job_id" in result:
-            return result["job_id"]
+            return str(result["job_id"])
         elif "id" in result:
-            return result["id"]
+            return str(result["id"])
         else:
             raise PDB2PQRError(f"No job ID in response: {result}")
 
@@ -374,7 +375,7 @@ class PDB2PQRInterface:
         try:
             response = self._requests.get(url, timeout=30)
             response.raise_for_status()
-            return response.json()
+            return cast(dict[str, Any], response.json())
         except self._requests.RequestException as e:
             raise ConnectionError(f"Failed to check status: {e}")
 
@@ -880,7 +881,7 @@ def find_and_fix_disulfides(
     disulfides = find_disulfides(structure, cutoff)
     if disulfides:
         rename_cys_to_cyx(structure, disulfides)
-    return disulfides
+    return cast(list[tuple[int, int]], disulfides)
 
 
 def remove_clashing_waters(
@@ -1010,8 +1011,8 @@ def center_structure(structure: parmed.Structure) -> NDArray[np.float64]:
     NDArray
         Translation vector applied
     """
-    coords = structure.coordinates
-    center = coords.mean(axis=0)
+    coords = np.asarray(structure.coordinates, dtype=np.float64)
+    center = np.asarray(coords.mean(axis=0), dtype=np.float64)
     structure.coordinates = coords - center
     return center
 
@@ -1351,6 +1352,7 @@ class AutoPrepare:
             pdb_file = self._source_file
         else:
             # Write current structure to temp file
+            assert self._pdb is not None
             with tempfile.NamedTemporaryFile(mode="w", suffix=".pdb", delete=False) as f:
                 self._pdb.save(f.name, overwrite=True)
                 pdb_file = Path(f.name)

@@ -21,7 +21,7 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, cast
 
 log = logging.getLogger(__name__)
 
@@ -198,10 +198,13 @@ class ActionsManager:
         actions : Action class, list, or string name(s)
             Actions to add
         """
-        if not isinstance(actions, list):
-            actions = [actions]
+        action_list: list[type[Action] | str]
+        if isinstance(actions, list):
+            action_list = cast(list[type[Action] | str], actions)
+        else:
+            action_list = [actions]
 
-        for action in actions:
+        for action in action_list:
             if isinstance(action, str):
                 # Try to resolve by name (for CLI use)
                 raise NotImplementedError("String action names not yet supported")
@@ -210,7 +213,7 @@ class ActionsManager:
             else:
                 raise TypeError(f"Expected Action class, got {type(action)}")
 
-        self.log.debug(f"Added {len(actions)} actions")
+        self.log.debug(f"Added {len(action_list)} actions")
 
     def prepare_jobs(self, **params) -> list[Job]:
         """
@@ -303,6 +306,7 @@ class ActionsManager:
             self.results[replica_name] = {}
 
         if job_result.success:
+            assert job_result.result is not None
             self.results[replica_name][action_name] = job_result.result
             self.log.info(f"Completed: {job_result.job.name}")
         else:
@@ -312,6 +316,8 @@ class ActionsManager:
     def _postprocess_result(self, job_result: JobResult) -> None:
         """Run postprocessing for a job result."""
         try:
+            if job_result.result is None:
+                return
             action = job_result.job.action_class(
                 job_result.job.replica,
                 **job_result.job.params,
@@ -349,3 +355,17 @@ class ActionsManager:
             return replica_results
 
         return replica_results.get(action_name)
+
+    def summary(self) -> str:
+        """Return a human-readable summary of stored results."""
+        if not self.results:
+            return "No results available"
+
+        lines = []
+        for replica_name in sorted(self.results):
+            lines.append(replica_name)
+            for action_name, result in sorted(self.results[replica_name].items()):
+                status = "failed" if "error" in result else "completed"
+                lines.append(f"  - {action_name}: {status}")
+
+        return "\n".join(lines)

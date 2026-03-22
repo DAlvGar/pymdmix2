@@ -822,7 +822,7 @@ class OpenMMWriter:
         if not settings or settings.restraint_mode.upper() == "FREE":
             return None
         if settings.restraint_mask:
-            return settings.restraint_mask
+            return str(settings.restraint_mask)
         mode = settings.restraint_mode.upper()
         if mode == "BB":
             return "backbone"

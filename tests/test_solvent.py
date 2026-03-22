@@ -234,6 +234,19 @@ class TestSolvent:
         assert len(loaded.residues) == len(solvent.residues)
         assert len(loaded.probes) == len(solvent.probes)
 
+    def test_write_off(self, tmp_output_dir):
+        """write_off() copies the configured OFF file content."""
+        source_off = tmp_output_dir / "source.off"
+        source_off.write_text("!mock off content\n")
+
+        solvent = Solvent(name="ETA", off_file=source_off)
+        output_off = tmp_output_dir / "output.off"
+
+        chars_written = solvent.write_off(output_off)
+
+        assert chars_written == len("!mock off content\n")
+        assert output_off.read_text() == "!mock off content\n"
+
     def test_from_file_json(self, tmp_output_dir):
         """from_file() with .json extension delegates to from_json()."""
         solvent = Solvent(

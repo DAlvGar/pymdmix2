@@ -291,6 +291,39 @@ class Solvent:
         with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
+    def write_off(self, path: str | Path) -> int:
+        """
+        Write the solvent OFF file to disk.
+
+        This preserves the legacy `Solvent.writeOff()` behavior used by the
+        original Amber solvation workflow, where the solvent object could emit
+        a temporary OFF file for LEaP loading.
+
+        Parameters
+        ----------
+        path : str | Path
+            Destination OFF file path.
+
+        Returns
+        -------
+        int
+            Number of characters written.
+
+        Raises
+        ------
+        ValueError
+            If this solvent has no associated OFF file.
+        FileNotFoundError
+            If the configured OFF file does not exist.
+        """
+        if self.off_file is None:
+            raise ValueError(f"Solvent {self.name} has no OFF file configured")
+        if not self.off_file.exists():
+            raise FileNotFoundError(f"Solvent OFF file not found: {self.off_file}")
+
+        content = self.off_file.read_text()
+        return Path(path).write_text(content)
+
     @classmethod
     def from_file(cls, path: str | Path) -> Solvent:
         """
