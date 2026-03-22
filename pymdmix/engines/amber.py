@@ -1306,3 +1306,39 @@ def ambpdb(
     except Exception as e:
         log.error(f"Error running ambpdb: {e}")
         return False
+
+
+def generate_ss_leap_commands(
+    unit_name: str,
+    ss_pairs: list[tuple[int, int]],
+) -> list[str]:
+    """
+    Generate tleap commands for disulfide bonds.
+
+    Equivalent to Biskit's AmberParmBuilder.__fLines(ss_bond, ss).
+
+    Parameters
+    ----------
+    unit_name : str
+        Leap unit name (e.g., 'mol')
+    ss_pairs : list[tuple[int, int]]
+        List of (residue_idx1, residue_idx2) pairs for disulfides.
+        Indices should be 1-based (leap convention).
+
+    Returns
+    -------
+    list[str]
+        Leap commands to create disulfide bonds
+
+    Examples
+    --------
+    >>> ss_pairs = [(10, 25), (33, 48)]
+    >>> cmds = generate_ss_leap_commands('protein', ss_pairs)
+    >>> # ['bond protein.10.SG protein.25.SG', 'bond protein.33.SG protein.48.SG']
+    """
+    commands = []
+    for res1, res2 in ss_pairs:
+        cmd = f"bond {unit_name}.{res1}.SG {unit_name}.{res2}.SG"
+        commands.append(cmd)
+        log.debug(f"SS bond command: {cmd}")
+    return commands
