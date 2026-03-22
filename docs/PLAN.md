@@ -490,7 +490,15 @@ def generate_ss_leap_commands(
 
 ## Testing
 
-Current: **626 tests passing** (updated 2026-03-22 16:00)
+Current: **641 tests passing** (updated 2026-03-22 16:25)
+
+Integration tests added covering:
+- Structure workflow (load, masks, alignment, disulfides)
+- Grid workflow (create, free energy, I/O)
+- MDSettings workflow (creation, restraints, TOML)
+- HotSpot workflow (sets, filtering, clustering)
+- ActionsManager workflow (serial, parallel)
+- Full pipeline (structure → hotspots)
 
 Each new module needs:
 - Unit tests in `tests/test_<module>.py`
@@ -536,8 +544,9 @@ Update this section as work progresses:
 | 2026-03-21 | Solvent library, CLI, tests |
 | 2026-03-22 AM | Expanded replica, amber, grid; repo consolidation; Biskit audit |
 | 2026-03-22 PM | **Biskit replacement COMPLETE**: 18 new functions in structure.py + amber.py |
-| 2026-03-22 PM | **MDSettings** ✅ + **ActionsManager** ✅ + **HotSpotSet** ✅ (626 tests) |
-| Next | Integration testing, CLI wiring |
+| 2026-03-22 PM | **MDSettings** ✅ + **ActionsManager** ✅ + **HotSpotSet** ✅ |
+| 2026-03-22 PM | **Docs migrated** + **Integration tests** (641 tests) |
+| Next | CLI commands for new features, more docs |
 
 ---
 
