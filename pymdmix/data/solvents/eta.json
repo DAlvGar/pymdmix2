@@ -5,6 +5,10 @@
   "off_file": "ETAWAT20.off",
   "box_unit": "ETAWAT20",
   "water_model": "TIP3P",
+  "volume": 7988.430381821445,
+  "is_ionic": false,
+  "total_charge": 0.0,
+  "corrections": {},
   "residues": [
     {
       "name": "ETA",
@@ -21,26 +25,26 @@
     {
       "name": "WAT",
       "residue": "WAT",
-      "atoms": [
-        "O"
-      ],
-      "description": "Water oxygen"
+      "atoms": ["O"],
+      "description": "Water oxygen",
+      "probe_types": ["Wat"],
+      "probability": 0.003270354594245488
     },
     {
       "name": "CT",
       "residue": "ETA",
-      "atoms": [
-        "C1"
-      ],
-      "description": "Hydrophobic"
+      "atoms": ["C1"],
+      "description": "Hydrophobic",
+      "probe_types": ["Hyd"],
+      "probability": 0.00026600970383814976
     },
     {
       "name": "OH",
       "residue": "ETA",
-      "atoms": [
-        "O1"
-      ],
-      "description": "Hydrogen bond donor, Hydrogen bond acceptor"
+      "atoms": ["O1"],
+      "description": "Hydrogen bond donor, Hydrogen bond acceptor",
+      "probe_types": ["Don", "Acc"],
+      "probability": 0.00026600970383814976
     }
   ]
 }

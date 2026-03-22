@@ -20,12 +20,13 @@ Examples
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, TypeVar
 import logging
 import time
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, TypeVar
 
 log = logging.getLogger(__name__)
 

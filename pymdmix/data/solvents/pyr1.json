@@ -5,6 +5,10 @@
   "off_file": "PYRWAT1.off",
   "box_unit": "PYRWAT1",
   "water_model": "TIP3P",
+  "volume": 22024.164601757482,
+  "is_ionic": false,
+  "total_charge": 0.0,
+  "corrections": {},
   "residues": [
     {
       "name": "PYR",
@@ -21,30 +25,26 @@
     {
       "name": "WAT",
       "residue": "WAT",
-      "atoms": [
-        "O"
-      ],
-      "description": "Water oxygen"
+      "atoms": ["O"],
+      "description": "Water oxygen",
+      "probe_types": ["Wat"],
+      "probability": 0.0024859058670325712
     },
     {
       "name": "C",
       "residue": "PYR",
-      "atoms": [
-        "C1",
-        "C2",
-        "C3",
-        "C4",
-        "C5"
-      ],
-      "description": "Arom"
+      "atoms": ["C1", "C2", "C3", "C4", "C5"],
+      "description": "Aromatic carbon",
+      "probe_types": ["Arom"],
+      "probability": 2.8377920856536202e-05
     },
     {
       "name": "N",
       "residue": "PYR",
-      "atoms": [
-        "N1"
-      ],
-      "description": "Hydrogen bond acceptor"
+      "atoms": ["N1"],
+      "description": "Hydrogen bond acceptor",
+      "probe_types": ["Acc"],
+      "probability": 5.675584171307241e-06
     }
   ]
 }

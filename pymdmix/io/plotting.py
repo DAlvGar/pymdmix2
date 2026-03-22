@@ -512,3 +512,67 @@ def plot_probe_distribution(
         fig.savefig(output, dpi=150, bbox_inches="tight")
 
     return fig
+
+
+def plot_replica_rmsd(
+    replica,
+    project_path: Path,
+    output: Optional[Union[str, Path]] = None,
+    **kwargs,
+) -> "plt.Figure":
+    """
+    Plot RMSD for a replica from its alignment output files.
+    
+    Parameters
+    ----------
+    replica : Replica
+        Replica object
+    project_path : Path
+        Path to project directory
+    output : Path, optional
+        Output file path
+        
+    Returns
+    -------
+    matplotlib.Figure
+    """
+    plt = _check_matplotlib()
+    
+    replica_path = project_path / replica.name
+    align_path = replica_path / "align"
+    
+    if not align_path.exists():
+        raise FileNotFoundError(f"Alignment directory not found: {align_path}")
+    
+    # Find RMSD files
+    rmsd_files = sorted(align_path.glob("*_bb_rmsd.dat")) + sorted(align_path.glob("*_bb_rmsd.out"))
+    
+    if not rmsd_files:
+        raise FileNotFoundError(f"No RMSD files found in {align_path}")
+    
+    # Load RMSD data
+    all_rmsd = []
+    for f in rmsd_files:
+        try:
+            data = np.loadtxt(f, comments=['#', '@'])
+            if data.ndim == 2:
+                all_rmsd.append(data[:, 1])  # Second column is RMSD
+            else:
+                all_rmsd.append(data)
+        except Exception:
+            continue
+    
+    if not all_rmsd:
+        raise ValueError(f"Could not load any RMSD data from {align_path}")
+    
+    # Concatenate
+    rmsd = np.concatenate(all_rmsd)
+    time = np.arange(len(rmsd)) * 0.001  # Assume 1 ps timestep, convert to ns
+    
+    return plot_rmsd(
+        rmsd=rmsd,
+        time=time,
+        title=f"RMSD: {replica.name}",
+        output=output,
+        **kwargs,
+    )

@@ -142,8 +142,8 @@ class TestReplica:
         replica.create_directory()
         
         assert replica.exists()
-        assert (replica.path / "input").exists()
-        assert (replica.path / "output").exists()
+        assert (replica.path / "min").exists()
+        assert (replica.path / "eq").exists()
     
     def test_set_state(self, tmp_output_dir):
         """Test changing replica state."""

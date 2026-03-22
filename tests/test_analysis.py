@@ -14,8 +14,15 @@ from pymdmix.analysis.base import (
     list_actions,
     run_action,
 )
-from pymdmix.analysis.density import DensityAction, calculate_density
-from pymdmix.analysis.residence import ResidenceAction
+from pymdmix.analysis.density import (
+    DensityAction,
+    DensityProteinAction,
+    DensityAllHAAction,
+    CpptrajDensityAction,
+    calculate_density,
+    Subregion,
+)
+from pymdmix.analysis.residence import ResidenceAction, ResidenceResult
 from pymdmix.analysis.hotspots import HotspotAction, Hotspot
 from pymdmix.core.grid import Grid
 
@@ -189,6 +196,333 @@ class TestDensityAction:
         assert "probe" in result.error.lower()
 
 
+class TestDensityActionCOM:
+    """Test center of mass (COM) probe features."""
+
+    def test_density_with_include_com(self, mock_trajectory, tmp_output_dir):
+        """Test density calculation with include_com=True."""
+        action = DensityAction()
+
+        # Regular probe indices
+        probe_indices = {"test_probe": np.arange(10)}
+
+        # COM residue indices: 2 residues, each with 5 atoms
+        com_residue_indices = {
+            "solvent": [np.arange(0, 5), np.arange(5, 10)],
+        }
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            probe_indices=probe_indices,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+            include_com=True,
+            com_residue_indices=com_residue_indices,
+        )
+
+        assert result.success is True
+        assert result.metadata["n_probes"] == 2  # test_probe + solvent_COM
+        assert any("COM" in str(f) for f in result.output_files)
+
+    def test_density_with_only_com(self, mock_trajectory, tmp_output_dir):
+        """Test density calculation with only_com=True."""
+        action = DensityAction()
+
+        # COM residue indices
+        com_residue_indices = {
+            "solvent": [np.arange(0, 5), np.arange(5, 10)],
+        }
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+            only_com=True,
+            com_residue_indices=com_residue_indices,
+        )
+
+        assert result.success is True
+        assert result.metadata["n_probes"] == 1  # Only solvent COM
+        assert "solvent" in result.metadata["probe_names"][0]
+
+    def test_density_only_com_without_indices_fails(self, mock_trajectory, tmp_output_dir):
+        """Test that only_com without com_residue_indices fails validation."""
+        action = DensityAction()
+
+        errors = action.validate(
+            mock_trajectory,
+            only_com=True,
+        )
+
+        assert len(errors) > 0
+        assert any("com_residue_indices" in e for e in errors)
+
+
+class TestDensitySubregion:
+    """Test subregion functionality for focused density calculation."""
+
+    def test_density_with_subregion(self, mock_trajectory, tmp_output_dir):
+        """Test density calculation with subregion."""
+        action = DensityAction()
+
+        probe_indices = {"test": np.arange(10)}
+
+        # Define a subregion in the center of the coordinate space
+        subregion = ((20.0, 20.0, 20.0), (30.0, 30.0, 30.0))
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            probe_indices=probe_indices,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+            subregion=subregion,
+        )
+
+        assert result.success is True
+        assert result.metadata["subregion"] == subregion
+
+    def test_density_subregion_validation(self, mock_trajectory):
+        """Test subregion validation."""
+        action = DensityAction()
+
+        # Invalid subregion (wrong format)
+        errors = action.validate(
+            mock_trajectory,
+            probe_indices={"test": np.arange(10)},
+            subregion=((1, 2, 3),),  # Only one point
+        )
+        assert len(errors) > 0
+
+        # Valid subregion
+        errors = action.validate(
+            mock_trajectory,
+            probe_indices={"test": np.arange(10)},
+            subregion=((0, 0, 0), (10, 10, 10)),
+        )
+        assert len(errors) == 0
+
+
+class TestDensityParallel:
+    """Test parallel processing for density calculation."""
+
+    def test_density_parallel_processing(self, mock_trajectory, tmp_output_dir):
+        """Test density calculation with multiple workers."""
+        action = DensityAction()
+
+        probe_indices = {"test": np.arange(10)}
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            probe_indices=probe_indices,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+            n_workers=2,
+        )
+
+        assert result.success is True
+        assert result.metadata["parallel_workers"] == 2
+
+    def test_density_sequential_vs_parallel_same_result(self, mock_trajectory, tmp_output_dir):
+        """Test that sequential and parallel give same results."""
+        action = DensityAction()
+        probe_indices = {"test": np.arange(20)}
+
+        # Sequential
+        result_seq = action.run(
+            trajectory=mock_trajectory,
+            probe_indices=probe_indices,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+            output_prefix="seq_",
+            n_workers=1,
+        )
+
+        # Parallel (need to reset trajectory)
+        mock_trajectory._current_frame = 0  # Reset for re-iteration
+        result_par = action.run(
+            trajectory=mock_trajectory,
+            probe_indices=probe_indices,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+            output_prefix="par_",
+            n_workers=2,
+        )
+
+        assert result_seq.success is True
+        assert result_par.success is True
+        # Both should have processed same number of frames
+        assert result_seq.metadata["n_frames"] == result_par.metadata["n_frames"]
+
+
+class TestDensityProteinAction:
+    """Test protein/solute density calculation."""
+
+    def test_density_protein_action_exists(self):
+        """Test density_protein action is registered."""
+        from pymdmix.analysis.density import DensityProteinAction
+        assert get_action("density_protein") is DensityProteinAction
+
+    def test_density_protein_calculation(self, mock_trajectory, tmp_output_dir):
+        """Test protein density calculation."""
+        from pymdmix.analysis.density import DensityProteinAction
+
+        action = DensityProteinAction()
+
+        # Use first 50 atoms as "solute"
+        solute_mask = np.zeros(mock_trajectory.n_atoms, dtype=bool)
+        solute_mask[:50] = True
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            solute_mask=solute_mask,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is True
+        assert len(result.output_files) == 1
+        assert "protein" in result.output_files[0].name
+
+    def test_density_protein_with_indices(self, mock_trajectory, tmp_output_dir):
+        """Test protein density with solute_indices instead of mask."""
+        from pymdmix.analysis.density import DensityProteinAction
+
+        action = DensityProteinAction()
+
+        # Use first 50 atoms as "solute"
+        solute_indices = np.arange(50)
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            solute_indices=solute_indices,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is True
+
+    def test_density_protein_requires_mask_or_indices(self, mock_trajectory, tmp_output_dir):
+        """Test that protein density requires solute mask or indices."""
+        from pymdmix.analysis.density import DensityProteinAction
+
+        action = DensityProteinAction()
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is False
+        assert "solute" in result.error.lower()
+
+
+class TestDensityAllHAAction:
+    """Test all heavy atoms density calculation."""
+
+    def test_density_all_ha_action_exists(self):
+        """Test density_all_ha action is registered."""
+        from pymdmix.analysis.density import DensityAllHAAction
+        assert get_action("density_all_ha") is DensityAllHAAction
+
+    def test_density_all_ha_calculation(self, mock_trajectory, tmp_output_dir):
+        """Test all heavy atoms density calculation."""
+        from pymdmix.analysis.density import DensityAllHAAction
+
+        action = DensityAllHAAction()
+
+        # Define heavy atom info for mock residues
+        heavy_atom_info = {
+            "ETA": {
+                "C1": [0, 5, 10],  # Indices for C1 atoms across residues
+                "O1": [1, 6, 11],  # Indices for O1 atoms
+            },
+            "ACN": {
+                "N1": [20, 25],
+            },
+        }
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            heavy_atom_info=heavy_atom_info,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is True
+        # Should have grids for: ETA_C1, ETA_O1, ETA_COM, ACN_N1, ACN_COM
+        assert result.metadata["n_probes"] == 5
+
+    def test_density_all_ha_excludes_water(self, mock_trajectory, tmp_output_dir):
+        """Test that WAT is excluded by default."""
+        from pymdmix.analysis.density import DensityAllHAAction
+
+        action = DensityAllHAAction()
+
+        heavy_atom_info = {
+            "ETA": {"C1": [0, 5]},
+            "WAT": {"O": [10, 15]},  # Should be excluded
+            "HOH": {"O": [20, 25]},  # Should also be excluded
+        }
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            heavy_atom_info=heavy_atom_info,
+            spacing=1.0,
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is True
+        # Only ETA should be processed: ETA_C1 + ETA_COM = 2
+        assert result.metadata["n_probes"] == 2
+
+
+class TestCpptrajDensityAction:
+    """Test cpptraj-based density calculation."""
+
+    def test_cpptraj_density_action_exists(self):
+        """Test cpptraj_density action is registered."""
+        from pymdmix.analysis.density import CpptrajDensityAction
+        assert get_action("cpptraj_density") is CpptrajDensityAction
+
+    def test_cpptraj_density_without_cpptraj(self, tmp_output_dir):
+        """Test cpptraj action fails gracefully without cpptraj."""
+        from pymdmix.analysis.density import CpptrajDensityAction
+        import os
+        import shutil
+
+        action = CpptrajDensityAction()
+
+        # Create mock topology and trajectory files
+        topo_path = tmp_output_dir / "system.prmtop"
+        traj_path = tmp_output_dir / "aligned.nc"
+        topo_path.touch()
+        traj_path.touch()
+
+        # Clear any cpptraj environment variable
+        old_ptraj = os.environ.pop('AMBER_PTRAJ', None)
+        
+        # Only run test if cpptraj is not installed
+        if shutil.which('cpptraj') is None:
+            result = action.run(
+                topology=topo_path,
+                trajectory_pattern=[str(traj_path)],
+                probe_masks={"OH": ":ETA@O1"},
+                grid_dimensions=(50, 50, 50),
+                grid_origin=(0.0, 0.0, 0.0),
+                grid_spacing=0.5,
+                output_dir=tmp_output_dir,
+            )
+
+            # Should fail with informative message
+            assert result.success is False
+            assert "cpptraj" in result.error.lower()
+
+        # Restore environment
+        if old_ptraj:
+            os.environ['AMBER_PTRAJ'] = old_ptraj
+
+
 class TestCalculateDensityFunction:
     """Test convenience function for density calculation."""
     
@@ -276,9 +610,178 @@ class TestResidenceAction:
         )
         
         assert result.success is True
-        assert len(result.output_files) == 2  # JSON + summary
+        assert len(result.output_files) == 3  # JSON + summary + data
         assert result.metadata["n_hotspots"] == 1
         assert result.metadata["n_frames"] == 10
+
+
+class TestResidenceParallel:
+    """Test parallel processing for residence calculation."""
+
+    def test_residence_parallel_processing(self, mock_trajectory, tmp_output_dir):
+        """Test residence calculation with multiple workers."""
+        action = ResidenceAction()
+
+        hotspot_coords = [(25.0, 25.0, 25.0)]
+        n_atoms = mock_trajectory.n_atoms
+        residue_ids = np.arange(n_atoms)
+        residue_names = np.array(["ETA"] * n_atoms)
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            hotspot_coords=hotspot_coords,
+            tolerance=15.0,
+            residue_ids=residue_ids,
+            residue_names=residue_names,
+            output_dir=tmp_output_dir,
+            n_workers=2,
+        )
+
+        assert result.success is True
+        assert result.metadata["parallel_workers"] == 2
+
+    def test_residence_with_track_residues(self, mock_trajectory, tmp_output_dir):
+        """Test residence calculation with residue type filtering."""
+        action = ResidenceAction()
+
+        hotspot_coords = [(25.0, 25.0, 25.0)]
+        n_atoms = mock_trajectory.n_atoms
+        residue_ids = np.arange(n_atoms)
+        # Mix of residue types
+        residue_names = np.array(["ETA" if i % 2 == 0 else "WAT" for i in range(n_atoms)])
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            hotspot_coords=hotspot_coords,
+            tolerance=15.0,
+            residue_ids=residue_ids,
+            residue_names=residue_names,
+            track_residues=["ETA"],  # Only track ETA
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is True
+        # Check that output mentions tracked residues
+        import json
+        with open(result.output_files[0]) as f:
+            data = json.load(f)
+        assert data["track_residues"] == ["ETA"]
+
+    def test_residence_with_non_hydrogen_mask(self, mock_trajectory, tmp_output_dir):
+        """Test residence calculation with non-hydrogen mask."""
+        action = ResidenceAction()
+
+        hotspot_coords = [(25.0, 25.0, 25.0)]
+        n_atoms = mock_trajectory.n_atoms
+        residue_ids = np.arange(n_atoms)
+
+        # Mask out every other atom (simulating hydrogen exclusion)
+        non_h_mask = np.array([i % 2 == 0 for i in range(n_atoms)])
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            hotspot_coords=hotspot_coords,
+            tolerance=15.0,
+            residue_ids=residue_ids,
+            non_hydrogen_mask=non_h_mask,
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is True
+
+    def test_residence_multiple_hotspots(self, mock_trajectory, tmp_output_dir):
+        """Test residence calculation with multiple hotspots."""
+        action = ResidenceAction()
+
+        hotspot_coords = [
+            (20.0, 20.0, 20.0),
+            (30.0, 30.0, 30.0),
+            (40.0, 40.0, 40.0),
+        ]
+        n_atoms = mock_trajectory.n_atoms
+        residue_ids = np.arange(n_atoms)
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            hotspot_coords=hotspot_coords,
+            tolerance=10.0,
+            residue_ids=residue_ids,
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is True
+        assert result.metadata["n_hotspots"] == 3
+        assert len(result.metadata["hotspot_occupancies"]) == 3
+
+    def test_residence_data_file_format(self, mock_trajectory, tmp_output_dir):
+        """Test that residence data file has correct format."""
+        action = ResidenceAction()
+
+        hotspot_coords = [(25.0, 25.0, 25.0)]
+        n_atoms = mock_trajectory.n_atoms
+        residue_ids = np.arange(n_atoms)
+        residue_names = np.array(["ETA"] * n_atoms)
+
+        result = action.run(
+            trajectory=mock_trajectory,
+            hotspot_coords=hotspot_coords,
+            tolerance=15.0,
+            residue_ids=residue_ids,
+            residue_names=residue_names,
+            output_dir=tmp_output_dir,
+        )
+
+        assert result.success is True
+
+        # Check data file format
+        data_file = [f for f in result.output_files if "data" in f.name][0]
+        with open(data_file) as f:
+            content = f.read()
+        
+        # Should have header comments
+        assert "# Residence results" in content
+        # Should have RESNAME-RESID MAP
+        assert "# RESNAME-RESID MAP" in content
+
+
+class TestResidenceResult:
+    """Test ResidenceResult dataclass."""
+
+    def test_residence_result_occupancy(self):
+        """Test occupancy calculation."""
+        from pymdmix.analysis.residence import ResidenceResult
+
+        result = ResidenceResult(
+            hotspot_id=0,
+            hotspot_coord=(0.0, 0.0, 0.0),
+            frame_residues={
+                1: [1, 2],  # Occupied
+                2: [0],     # Not occupied (0 marker)
+                3: [3],     # Occupied
+                4: [0],     # Not occupied
+            },
+            total_frames=4,
+        )
+
+        # 2 out of 4 frames occupied
+        assert result.occupancy == 0.5
+
+    def test_residence_result_top_residues(self):
+        """Test top residues calculation."""
+        from pymdmix.analysis.residence import ResidenceResult
+
+        result = ResidenceResult(
+            hotspot_id=0,
+            hotspot_coord=(0.0, 0.0, 0.0),
+            residue_counts={1: 10, 2: 5, 3: 8, 4: 3},
+            total_frames=10,
+        )
+
+        top = result.top_residues(3)
+        assert len(top) == 3
+        assert top[0] == (1, 10)  # Most frequent
+        assert top[1] == (3, 8)
+        assert top[2] == (2, 5)
 
 
 class TestHotspotAction:

@@ -563,3 +563,182 @@ system.addForce(restraint_force)
         ))
         
         return scripts
+
+
+# ============================================================================
+# OpenMM Utility Functions
+# ============================================================================
+
+def apply_harmonic_positional_restraints(
+    system,
+    force_constant: float,
+    coordinates,
+    atom_indices: Sequence[int],
+) -> None:
+    """
+    Apply harmonic positional restraints to selected atoms.
+    
+    Mimics AMBER's restraint_wt functionality by adding a CustomExternalForce
+    that restrains atoms to their initial positions.
+    
+    Parameters
+    ----------
+    system : openmm.System
+        OpenMM system to modify (in place)
+    force_constant : float
+        Force constant in kcal/(mol·Å²)
+    coordinates : openmm.app.AmberInpcrdFile or similar
+        Coordinate file with getPositions() method
+    atom_indices : Sequence[int]
+        Indices of atoms to restrain
+        
+    Examples
+    --------
+    >>> import openmm.app as app
+    >>> prmtop = app.AmberPrmtopFile("system.prmtop")
+    >>> inpcrd = app.AmberInpcrdFile("system.inpcrd")
+    >>> system = prmtop.createSystem()
+    >>> # Restrain backbone atoms (indices 0-99)
+    >>> apply_harmonic_positional_restraints(system, 10.0, inpcrd, range(100))
+    
+    Notes
+    -----
+    This function requires OpenMM to be installed. It will raise ImportError
+    if OpenMM is not available.
+    """
+    try:
+        import openmm as mm
+        import openmm.unit as u
+    except ImportError:
+        import simtk.openmm as mm
+        import simtk.unit as u
+    
+    # Convert force constant to OpenMM units
+    k_kcal = u.Quantity(
+        value=force_constant,
+        unit=u.kilocalorie / (u.mole * u.angstrom * u.angstrom)
+    )
+    k_kj = k_kcal.in_units_of(
+        u.kilojoule / (u.mole * u.nanometer * u.nanometer)
+    )
+    
+    # Create restraint force
+    force = mm.CustomExternalForce("k*((x-x0)^2+(y-y0)^2+(z-z0)^2)")
+    force.addGlobalParameter("k", k_kj)
+    force.addPerParticleParameter("x0")
+    force.addPerParticleParameter("y0")
+    force.addPerParticleParameter("z0")
+    
+    # Add particles with their reference positions
+    positions = coordinates.getPositions()
+    for i in atom_indices:
+        force.addParticle(i, positions[i])
+    
+    system.addForce(force)
+
+
+def set_context_from_restart(simulation, restart_file) -> None:
+    """
+    Restore simulation context from an Amber restart file.
+    
+    Sets positions, velocities, and periodic box vectors from
+    an Amber .rst7 restart file.
+    
+    Parameters
+    ----------
+    simulation : openmm.app.Simulation
+        OpenMM simulation object
+    restart_file : openmm.app.AmberInpcrdFile
+        Loaded restart file with positions, velocities, and box vectors
+        
+    Examples
+    --------
+    >>> import openmm.app as app
+    >>> prmtop = app.AmberPrmtopFile("system.prmtop")
+    >>> system = prmtop.createSystem()
+    >>> integrator = mm.LangevinIntegrator(300*u.kelvin, 1/u.ps, 2*u.fs)
+    >>> simulation = app.Simulation(prmtop.topology, system, integrator)
+    >>> restart = app.AmberInpcrdFile("restart.rst7")
+    >>> set_context_from_restart(simulation, restart)
+    
+    Notes
+    -----
+    The restart file must contain velocities and box vectors for full
+    restoration. If velocities are missing, only positions are set.
+    """
+    try:
+        import openmm as mm
+        import openmm.unit as u
+    except ImportError:
+        import simtk.openmm as mm
+        import simtk.unit as u
+    
+    # Set positions
+    simulation.context.setPositions(restart_file.positions)
+    
+    # Set velocities if available
+    if hasattr(restart_file, 'velocities') and restart_file.velocities is not None:
+        simulation.context.setVelocities(restart_file.velocities)
+    
+    # Set box vectors if available
+    box_vectors = restart_file.getBoxVectors()
+    if box_vectors is not None:
+        x = mm.Vec3(
+            box_vectors[0][0].value_in_unit(u.nanometers),
+            box_vectors[0][1].value_in_unit(u.nanometers),
+            box_vectors[0][2].value_in_unit(u.nanometers),
+        )
+        y = mm.Vec3(
+            box_vectors[1][0].value_in_unit(u.nanometers),
+            box_vectors[1][1].value_in_unit(u.nanometers),
+            box_vectors[1][2].value_in_unit(u.nanometers),
+        )
+        z = mm.Vec3(
+            box_vectors[2][0].value_in_unit(u.nanometers),
+            box_vectors[2][1].value_in_unit(u.nanometers),
+            box_vectors[2][2].value_in_unit(u.nanometers),
+        )
+        simulation.context.setPeriodicBoxVectors(x, y, z)
+
+
+def get_backbone_indices(topology) -> list[int]:
+    """
+    Get indices of backbone atoms from OpenMM topology.
+    
+    Parameters
+    ----------
+    topology : openmm.app.Topology
+        OpenMM topology object
+        
+    Returns
+    -------
+    list[int]
+        Indices of backbone atoms (CA, C, N, O)
+    """
+    backbone_names = {"CA", "C", "N", "O"}
+    indices = []
+    for atom in topology.atoms():
+        if atom.name in backbone_names:
+            indices.append(atom.index)
+    return indices
+
+
+def get_heavy_atom_indices(topology) -> list[int]:
+    """
+    Get indices of heavy (non-hydrogen) atoms from OpenMM topology.
+    
+    Parameters
+    ----------
+    topology : openmm.app.Topology
+        OpenMM topology object
+        
+    Returns
+    -------
+    list[int]
+        Indices of heavy atoms
+    """
+    indices = []
+    for atom in topology.atoms():
+        if atom.element is not None and atom.element.mass > 1.5:
+            indices.append(atom.index)
+    return indices

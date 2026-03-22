@@ -14,10 +14,10 @@ Examples
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
 import json
 import logging
+from dataclasses import dataclass, field
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -37,11 +37,17 @@ class Probe:
         Atom names to track
     description : str
         Human-readable description
+    probe_types : list[str]
+        Chemical types for this probe (e.g., ["Don", "Acc"], ["Hyd"], ["Wat"])
+    probability : float | None
+        Expected probability per probe atom (derived from volume)
     """
     name: str
     residue: str
     atoms: list[str]
     description: str = ""
+    probe_types: list[str] = field(default_factory=list)
+    probability: float | None = None
 
     @property
     def selection(self) -> str:
@@ -92,6 +98,14 @@ class Solvent:
         Probe definitions for analysis
     off_file : Path | None
         LEaP object file for solvation
+    volume : float | None
+        Box volume in Å³
+    is_ionic : bool
+        Whether the solvent contains ionic species
+    total_charge : float
+        Total charge of the solvent box
+    corrections : dict[str, float]
+        Correction factors per probe
 
     Examples
     --------
@@ -103,9 +117,11 @@ class Solvent:
     ...         SolventResidue("WAT", 800),
     ...     ],
     ...     probes=[
-    ...         Probe("OH", "ETA", ["O1"], "Ethanol hydroxyl"),
-    ...         Probe("CT", "ETA", ["C2"], "Ethanol methyl"),
+    ...         Probe("OH", "ETA", ["O1"], "Ethanol hydroxyl", ["Don", "Acc"]),
+    ...         Probe("CT", "ETA", ["C2"], "Ethanol methyl", ["Hyd"]),
     ...     ],
+    ...     volume=7988.43,
+    ...     is_ionic=False,
     ... )
     """
     name: str
@@ -116,6 +132,10 @@ class Solvent:
     off_file: Path | None = None
     box_unit: str = ""
     water_model: str = "TIP3P"
+    volume: float | None = None
+    is_ionic: bool = False
+    total_charge: float = 0.0
+    corrections: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self):
         """Set full_name to name if not provided."""
@@ -137,6 +157,49 @@ class Solvent:
         """Get list of probe names."""
         return [p.name for p in self.probes]
 
+    def get_types_map(self) -> dict[str, str]:
+        """
+        Get mapping of probe names to chemical types.
+        
+        Returns a dict like {'OH': 'Don,Acc', 'CT': 'Hyd', 'WAT': 'Wat'}
+        """
+        return {
+            p.name: ','.join(p.probe_types)
+            for p in self.probes
+            if p.probe_types
+        }
+
+    def calculate_probability(self, probe_name: str) -> float | None:
+        """
+        Calculate expected probability for a probe.
+        
+        Probability = 1 / volume (per probe atom in standard units).
+        This is used for Boltzmann energy calculations.
+        
+        Parameters
+        ----------
+        probe_name : str
+            Name of the probe
+            
+        Returns
+        -------
+        float | None
+            Probability value, or None if volume not set or probe not found
+        """
+        if self.volume is None or self.volume <= 0:
+            return None
+        
+        probe = self.get_probe(probe_name)
+        if probe is None:
+            return None
+        
+        # Return stored probability if available
+        if probe.probability is not None:
+            return probe.probability
+        
+        # Calculate from volume (simplified - actual calculation may vary)
+        return 1.0 / self.volume
+
     @classmethod
     def from_dict(cls, data: dict) -> Solvent:
         """Create Solvent from dictionary."""
@@ -144,10 +207,22 @@ class Solvent:
             SolventResidue(**r) if isinstance(r, dict) else r
             for r in data.get('residues', [])
         ]
-        probes = [
-            Probe(**p) if isinstance(p, dict) else p
-            for p in data.get('probes', [])
-        ]
+        
+        # Handle probes with new fields
+        probes = []
+        for p in data.get('probes', []):
+            if isinstance(p, dict):
+                probe = Probe(
+                    name=p['name'],
+                    residue=p['residue'],
+                    atoms=p['atoms'],
+                    description=p.get('description', ''),
+                    probe_types=p.get('probe_types', []),
+                    probability=p.get('probability'),
+                )
+                probes.append(probe)
+            else:
+                probes.append(p)
 
         off_file = data.get('off_file')
         if off_file:
@@ -162,6 +237,10 @@ class Solvent:
             off_file=off_file,
             box_unit=data.get('box_unit', ''),
             water_model=data.get('water_model', 'TIP3P'),
+            volume=data.get('volume'),
+            is_ionic=data.get('is_ionic', False),
+            total_charge=data.get('total_charge', 0.0),
+            corrections=data.get('corrections', {}),
         )
 
     @classmethod
@@ -180,20 +259,34 @@ class Solvent:
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
-        return {
+        result = {
             'name': self.name,
+            'full_name': self.full_name,
             'description': self.description,
+            'off_file': str(self.off_file) if self.off_file else None,
+            'box_unit': self.box_unit,
+            'water_model': self.water_model,
+            'volume': self.volume,
+            'is_ionic': self.is_ionic,
+            'total_charge': self.total_charge,
+            'corrections': self.corrections,
             'residues': [
                 {'name': r.name, 'count': r.count, 'description': r.description}
                 for r in self.residues
             ],
             'probes': [
-                {'name': p.name, 'residue': p.residue,
-                 'atoms': p.atoms, 'description': p.description}
+                {
+                    'name': p.name,
+                    'residue': p.residue,
+                    'atoms': p.atoms,
+                    'description': p.description,
+                    'probe_types': p.probe_types,
+                    'probability': p.probability,
+                }
                 for p in self.probes
             ],
-            'off_file': str(self.off_file) if self.off_file else None,
         }
+        return result
 
     def to_json(self, path: str | Path) -> None:
         """Save solvent to JSON file."""
@@ -300,7 +393,9 @@ def create_standard_solvents() -> list[Solvent]:
             name="WAT",
             description="Pure water",
             residues=[SolventResidue("WAT", 1000)],
-            probes=[Probe("O", "WAT", ["O"], "Water oxygen")],
+            probes=[Probe("O", "WAT", ["O"], "Water oxygen", ["Wat"], 0.00408)],
+            volume=6617.51,
+            is_ionic=False,
         ),
         Solvent(
             name="ETA",
@@ -310,35 +405,42 @@ def create_standard_solvents() -> list[Solvent]:
                 SolventResidue("WAT", 800, "Water"),
             ],
             probes=[
-                Probe("OH", "ETA", ["O1"], "Ethanol hydroxyl oxygen"),
-                Probe("CT", "ETA", ["C2"], "Ethanol methyl carbon"),
-                Probe("WAT", "WAT", ["O"], "Water oxygen"),
+                Probe("OH", "ETA", ["O1"], "Ethanol hydroxyl oxygen", ["Don", "Acc"], 0.000266),
+                Probe("CT", "ETA", ["C1"], "Ethanol methyl carbon", ["Hyd"], 0.000266),
+                Probe("WAT", "WAT", ["O"], "Water oxygen", ["Wat"], 0.00327),
             ],
+            volume=7988.43,
+            is_ionic=False,
         ),
         Solvent(
             name="MAM",
-            description="20% Methylamine / 80% Water",
+            description="20% Acetamide / 80% Water",
             residues=[
-                SolventResidue("MAM", 200, "Methylamine"),
+                SolventResidue("MAM", 200, "Acetamide"),
                 SolventResidue("WAT", 800, "Water"),
             ],
             probes=[
-                Probe("N", "MAM", ["N"], "Amine nitrogen"),
-                Probe("CT", "MAM", ["C"], "Methyl carbon"),
-                Probe("WAT", "WAT", ["O"], "Water oxygen"),
+                Probe("N", "MAM", ["N1"], "Amine nitrogen", ["Don"], 0.000288),
+                Probe("O", "MAM", ["O1"], "Carbonyl oxygen", ["Acc"], 0.000288),
+                Probe("CT", "MAM", ["C2"], "Methyl carbon", ["Hyd"], 0.000288),
+                Probe("WAT", "WAT", ["O"], "Water oxygen", ["Wat"], 0.00334),
             ],
+            volume=7817.91,
+            is_ionic=False,
         ),
         Solvent(
-            name="ACN",
+            name="ANT",
             description="20% Acetonitrile / 80% Water",
             residues=[
-                SolventResidue("ACN", 200, "Acetonitrile"),
+                SolventResidue("ANT", 200, "Acetonitrile"),
                 SolventResidue("WAT", 800, "Water"),
             ],
             probes=[
-                Probe("N", "ACN", ["N1"], "Nitrile nitrogen"),
-                Probe("CT", "ACN", ["C1"], "Methyl carbon"),
-                Probe("WAT", "WAT", ["O"], "Water oxygen"),
+                Probe("N", "ANT", ["N1"], "Nitrile nitrogen", ["Acc"], 0.000271),
+                Probe("C", "ANT", ["C3"], "Methyl carbon", ["Hyd"], 0.000271),
+                Probe("WAT", "WAT", ["O"], "Water oxygen", ["Wat"], 0.00333),
             ],
+            volume=7834.51,
+            is_ionic=False,
         ),
     ]

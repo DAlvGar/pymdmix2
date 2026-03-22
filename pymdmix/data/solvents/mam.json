@@ -5,6 +5,10 @@
   "off_file": "MAMWAT20.off",
   "box_unit": "MAMWAT20",
   "water_model": "TIP3P",
+  "volume": 7817.914403153523,
+  "is_ionic": false,
+  "total_charge": 0.0,
+  "corrections": {},
   "residues": [
     {
       "name": "MAM",
@@ -21,34 +25,34 @@
     {
       "name": "WAT",
       "residue": "WAT",
-      "atoms": [
-        "O"
-      ],
-      "description": "Water oxygen"
+      "atoms": ["O"],
+      "description": "Water oxygen",
+      "probe_types": ["Wat"],
+      "probability": 0.003341684067231783
     },
     {
       "name": "N",
       "residue": "MAM",
-      "atoms": [
-        "N1"
-      ],
-      "description": "Hydrogen bond donor"
+      "atoms": ["N1"],
+      "description": "Hydrogen bond donor",
+      "probe_types": ["Don"],
+      "probability": 0.0002878005416754645
     },
     {
       "name": "O",
       "residue": "MAM",
-      "atoms": [
-        "O1"
-      ],
-      "description": "Hydrogen bond acceptor"
+      "atoms": ["O1"],
+      "description": "Hydrogen bond acceptor",
+      "probe_types": ["Acc"],
+      "probability": 0.0002878005416754645
     },
     {
       "name": "CT",
       "residue": "MAM",
-      "atoms": [
-        "C2"
-      ],
-      "description": "Hydrophobic"
+      "atoms": ["C2"],
+      "description": "Hydrophobic",
+      "probe_types": ["Hyd"],
+      "probability": 0.0002878005416754645
     }
   ]
 }

@@ -5,6 +5,10 @@
   "off_file": "IONWAT20.off",
   "box_unit": "CN3COOWAT",
   "water_model": "TIP3P",
+  "volume": 10893.230048293986,
+  "is_ionic": true,
+  "total_charge": 0.0,
+  "corrections": {},
   "residues": [
     {
       "name": "CN3",
@@ -26,27 +30,26 @@
     {
       "name": "WAT",
       "residue": "WAT",
-      "atoms": [
-        "O"
-      ],
-      "description": "Water oxygen"
+      "atoms": ["O"],
+      "description": "Water oxygen",
+      "probe_types": ["Wat"],
+      "probability": 0.0036146303553156495
     },
     {
       "name": "NEG",
       "residue": "COO",
-      "atoms": [
-        "O1",
-        "O2"
-      ],
-      "description": "Negative charge"
+      "atoms": ["O1", "O2"],
+      "description": "Negative charge",
+      "probe_types": ["Neg"],
+      "probability": 0.00027540040802404947
     },
     {
       "name": "POS",
       "residue": "CN3",
-      "atoms": [
-        "N1"
-      ],
-      "description": "Positive charge"
+      "atoms": ["N1"],
+      "description": "Positive charge",
+      "probe_types": ["Pos"],
+      "probability": 0.00013770020401202473
     }
   ]
 }

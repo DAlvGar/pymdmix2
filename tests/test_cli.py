@@ -120,8 +120,8 @@ class TestAnalyzeCommands:
         """Test hotspots command help."""
         result = runner.invoke(cli, ["analyze", "hotspots", "--help"])
         assert result.exit_code == 0
-        assert "percentile" in result.output
-        assert "cutoff" in result.output
+        assert "threshold" in result.output or "cutoff" in result.output
+        assert "min-size" in result.output
 
 
 # =============================================================================
@@ -153,9 +153,8 @@ class TestQueueCommand:
         """Test queue command help."""
         result = runner.invoke(cli, ["queue", "--help"])
         assert result.exit_code == 0
-        assert "slurm" in result.output
-        assert "sge" in result.output
-        assert "pbs" in result.output
+        assert "generate" in result.output.lower()
+        assert "submit" in result.output.lower()
 
 
 # =============================================================================

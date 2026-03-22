@@ -23,7 +23,6 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 
@@ -130,7 +129,7 @@ def _align_mdanalysis(
     """Align using MDAnalysis."""
     try:
         import MDAnalysis as mda
-        from MDAnalysis.analysis import align, rms
+        from MDAnalysis.analysis import align
     except ImportError:
         raise ImportError("MDAnalysis required for alignment. Install with: pip install MDAnalysis")
     
@@ -226,7 +225,7 @@ def _align_cpptraj(
     
     try:
         # Run cpptraj
-        log.info(f"Running cpptraj alignment...")
+        log.info("Running cpptraj alignment...")
         result = subprocess.run(
             ["cpptraj", "-i", script_path],
             capture_output=True,
@@ -347,3 +346,60 @@ def align_replica(
         mask=mask,
         **kwargs,
     )
+
+
+# =============================================================================
+# AlignAction wrapper class
+# =============================================================================
+
+class AlignAction:
+    """
+    Action wrapper for trajectory alignment.
+    
+    Parameters
+    ----------
+    mask : str, optional
+        Atom selection for RMSD fitting (default: "@CA,C,N")
+    reference : Path, optional
+        Reference structure for alignment
+    nprocs : int
+        Number of processors (for API compatibility)
+    """
+    
+    name = "align"
+    description = "Align trajectory to reference structure"
+    
+    def __init__(
+        self,
+        mask: str | None = None,
+        reference: Path | None = None,
+        nprocs: int = 1,
+    ):
+        self.mask = mask or "@CA,C,N"
+        self.reference = reference
+        self.nprocs = nprocs
+    
+    def run(self, replica, step_range: tuple | None = None, **kwargs) -> AlignmentResult:
+        """
+        Run alignment on a replica.
+        
+        Parameters
+        ----------
+        replica : Replica
+            Replica to align
+        step_range : tuple, optional
+            (start, end) nanoseconds to align
+            
+        Returns
+        -------
+        AlignmentResult
+        """
+        result = align_replica(
+            replica,
+            reference=self.reference,
+            mask=self.mask,
+            **kwargs,
+        )
+        # Add mean_rmsd attribute for CLI compatibility
+        result.mean_rmsd = result.rmsd_mean
+        return result

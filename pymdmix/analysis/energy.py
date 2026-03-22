@@ -23,9 +23,9 @@ Examples
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -344,3 +344,65 @@ def replica_average(
         raise ValueError(f"No grids found for probe {probe}")
     
     return boltzmann_average(grid_paths, temperature=temperature)
+
+
+# =============================================================================
+# EnergyAction wrapper class
+# =============================================================================
+
+class EnergyAction:
+    """
+    Action wrapper for density-to-energy conversion.
+    
+    Parameters
+    ----------
+    temperature : float
+        Temperature in Kelvin (default: 300)
+    """
+    
+    name = "energy"
+    description = "Convert density grids to free energy"
+    
+    def __init__(self, temperature: float = 300.0):
+        self.temperature = temperature
+    
+    def run(self, replica, **kwargs) -> "EnergyResult":
+        """
+        Convert density grids to energy for a replica.
+        
+        Parameters
+        ----------
+        replica : Replica
+            Replica with density grids
+            
+        Returns
+        -------
+        EnergyResult
+            Container with energy grids
+        """
+        from pymdmix.core.grid import Grid
+        
+        # Find density grids in replica
+        grids_path = replica.path / "grids"
+        if not grids_path.exists():
+            raise ValueError(f"No grids directory found: {grids_path}")
+        
+        density_files = list(grids_path.glob("*_density.dx"))
+        if not density_files:
+            raise ValueError(f"No density grids found in {grids_path}")
+        
+        energy_grids = {}
+        for density_file in density_files:
+            probe_name = density_file.stem.replace("_density", "")
+            
+            # Load and convert
+            density_grid = Grid.read_dx(str(density_file))
+            energy_grid = density_to_free_energy(density_grid, self.temperature)
+            
+            # Save energy grid
+            energy_file = grids_path / f"{probe_name}_DG.dx"
+            energy_grid.write_dx(str(energy_file))
+            
+            energy_grids[probe_name] = energy_grid
+        
+        return EnergyResult(grids=energy_grids, temperature=self.temperature)

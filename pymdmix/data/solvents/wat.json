@@ -5,6 +5,10 @@
   "off_file": "WATBOX.off",
   "box_unit": "TIP3PBOX",
   "water_model": "TIP3P",
+  "volume": 6617.510824524691,
+  "is_ionic": false,
+  "total_charge": 0.0,
+  "corrections": {},
   "residues": [
     {
       "name": "WAT",
@@ -16,10 +20,10 @@
     {
       "name": "WAT",
       "residue": "WAT",
-      "atoms": [
-        "O"
-      ],
-      "description": "Water oxygen"
+      "atoms": ["O"],
+      "description": "Water oxygen",
+      "probe_types": ["Wat"],
+      "probability": 0.004080083994715536
     }
   ]
 }

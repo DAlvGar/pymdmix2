@@ -31,6 +31,20 @@ class TestProbe:
         assert probe.residue == "ETA"
         assert probe.atoms == ["O1"]
     
+    def test_probe_with_types(self):
+        """Test creating a probe with chemical types."""
+        probe = Probe(
+            name="OH",
+            residue="ETA",
+            atoms=["O1"],
+            description="Ethanol hydroxyl",
+            probe_types=["Don", "Acc"],
+            probability=0.000266,
+        )
+        
+        assert probe.probe_types == ["Don", "Acc"]
+        assert probe.probability == 0.000266
+    
     def test_probe_selection(self):
         """Test probe MDAnalysis selection string."""
         probe = Probe(name="OH", residue="ETA", atoms=["O1", "H1"])
@@ -86,6 +100,64 @@ class TestSolvent:
         assert solvent.name == "ETA"
         assert len(solvent.residues) == 2
         assert len(solvent.probes) == 1
+    
+    def test_solvent_with_extra_fields(self):
+        """Test creating a solvent with volume, is_ionic, etc."""
+        solvent = Solvent(
+            name="ETA",
+            description="20% Ethanol",
+            residues=[
+                SolventResidue("ETA", 200),
+                SolventResidue("WAT", 800),
+            ],
+            probes=[
+                Probe("OH", "ETA", ["O1"], "Hydroxyl", ["Don", "Acc"], 0.000266),
+                Probe("CT", "ETA", ["C1"], "Hydrophobic", ["Hyd"], 0.000266),
+            ],
+            volume=7988.43,
+            is_ionic=False,
+            total_charge=0.0,
+            corrections={},
+        )
+        
+        assert solvent.volume == 7988.43
+        assert solvent.is_ionic is False
+        assert solvent.total_charge == 0.0
+        assert solvent.corrections == {}
+    
+    def test_get_types_map(self):
+        """Test getting types map from solvent."""
+        solvent = Solvent(
+            name="ETA",
+            probes=[
+                Probe("OH", "ETA", ["O1"], "Hydroxyl", ["Don", "Acc"]),
+                Probe("CT", "ETA", ["C1"], "Hydrophobic", ["Hyd"]),
+                Probe("WAT", "WAT", ["O"], "Water", ["Wat"]),
+            ],
+        )
+        
+        types_map = solvent.get_types_map()
+        
+        assert types_map["OH"] == "Don,Acc"
+        assert types_map["CT"] == "Hyd"
+        assert types_map["WAT"] == "Wat"
+    
+    def test_calculate_probability(self):
+        """Test probability calculation."""
+        solvent = Solvent(
+            name="ETA",
+            probes=[
+                Probe("OH", "ETA", ["O1"], probability=0.000266),
+            ],
+            volume=7988.43,
+        )
+        
+        # Should return stored probability
+        prob = solvent.calculate_probability("OH")
+        assert prob == 0.000266
+        
+        # Missing probe should return None
+        assert solvent.calculate_probability("MISSING") is None
     
     def test_get_probe(self):
         """Test getting probe by name."""
@@ -262,3 +334,116 @@ class TestStandardSolvents:
         probe_names = eta.get_probe_names()
         assert "OH" in probe_names
         assert "CT" in probe_names
+        
+        # Should have volume and probe types
+        assert eta.volume is not None
+        assert eta.volume > 0
+        
+        oh_probe = eta.get_probe("OH")
+        assert "Don" in oh_probe.probe_types
+        assert "Acc" in oh_probe.probe_types
+
+
+class TestSolventLibraryIntegration:
+    """Integration tests for SolventLibrary with actual JSON files."""
+    
+    def test_load_all_solvents_with_extra_fields(self):
+        """Test loading all solvents from the library with extra fields."""
+        library = SolventLibrary()
+        
+        # Should load at least 9 solvents
+        assert len(library) >= 9
+        
+        # Check each solvent has the extra fields
+        for solvent in library:
+            # Volume should be set
+            assert solvent.volume is not None, f"{solvent.name} missing volume"
+            assert solvent.volume > 0, f"{solvent.name} has invalid volume"
+            
+            # is_ionic should be a bool
+            assert isinstance(solvent.is_ionic, bool), f"{solvent.name} is_ionic not bool"
+            
+            # total_charge should be set
+            assert isinstance(solvent.total_charge, (int, float)), f"{solvent.name} total_charge invalid"
+            
+            # Each probe should have types
+            for probe in solvent.probes:
+                assert len(probe.probe_types) > 0, \
+                    f"{solvent.name}/{probe.name} missing probe_types"
+                assert probe.probability is not None, \
+                    f"{solvent.name}/{probe.name} missing probability"
+    
+    def test_ionic_solvent_correctly_marked(self):
+        """Test that ION solvent is marked as ionic."""
+        library = SolventLibrary()
+        ion = library.get("ION")
+        
+        assert ion is not None
+        assert ion.is_ionic is True
+        
+        # Check non-ionic solvents
+        eta = library.get("ETA")
+        assert eta.is_ionic is False
+    
+    def test_probe_types_mapping(self):
+        """Test that probe types are correctly loaded."""
+        library = SolventLibrary()
+        
+        # ETA should have Don,Acc for OH and Hyd for CT
+        eta = library.get("ETA")
+        types_map = eta.get_types_map()
+        
+        assert "Don" in types_map.get("OH", "")
+        assert "Acc" in types_map.get("OH", "")
+        assert "Hyd" in types_map.get("CT", "")
+        assert "Wat" in types_map.get("WAT", "")
+    
+    def test_probability_values_realistic(self):
+        """Test that probability values are in realistic range."""
+        library = SolventLibrary()
+        
+        for solvent in library:
+            for probe in solvent.probes:
+                # Probability should be small positive number
+                assert probe.probability > 0, \
+                    f"{solvent.name}/{probe.name} probability <= 0"
+                assert probe.probability < 1, \
+                    f"{solvent.name}/{probe.name} probability >= 1"
+                # Typical range is 1e-6 to 1e-2
+                assert probe.probability < 0.01, \
+                    f"{solvent.name}/{probe.name} probability too large"
+    
+    def test_eta_probability_matches_expected(self):
+        """Test that ETA probabilities match expected values from old DB."""
+        library = SolventLibrary()
+        eta = library.get("ETA")
+        
+        oh_probe = eta.get_probe("OH")
+        ct_probe = eta.get_probe("CT")
+        wat_probe = eta.get_probe("WAT")
+        
+        # Values from the old SOLVENTS.db
+        assert abs(oh_probe.probability - 0.00026600970383814976) < 1e-10
+        assert abs(ct_probe.probability - 0.00026600970383814976) < 1e-10
+        assert abs(wat_probe.probability - 0.003270354594245488) < 1e-10
+    
+    def test_roundtrip_json(self, tmp_output_dir):
+        """Test that solvent can be saved and loaded with all fields."""
+        library = SolventLibrary()
+        eta = library.get("ETA")
+        
+        # Save to JSON
+        json_path = tmp_output_dir / "eta_test.json"
+        eta.to_json(json_path)
+        
+        # Load back
+        loaded = Solvent.from_json(json_path)
+        
+        # Verify all fields preserved
+        assert loaded.volume == eta.volume
+        assert loaded.is_ionic == eta.is_ionic
+        assert loaded.total_charge == eta.total_charge
+        
+        for orig_probe, loaded_probe in zip(eta.probes, loaded.probes):
+            assert loaded_probe.probe_types == orig_probe.probe_types
+            assert loaded_probe.probability == orig_probe.probability

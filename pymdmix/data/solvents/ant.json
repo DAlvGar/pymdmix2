@@ -5,6 +5,10 @@
   "off_file": "ANTWAT20.off",
   "box_unit": "ANTWAT20",
   "water_model": "TIP3P",
+  "volume": 7834.5080477364745,
+  "is_ionic": false,
+  "total_charge": 0.0,
+  "corrections": {},
   "residues": [
     {
       "name": "ANT",
@@ -21,26 +25,26 @@
     {
       "name": "WAT",
       "residue": "WAT",
-      "atoms": [
-        "O"
-      ],
-      "description": "Water oxygen"
+      "atoms": ["O"],
+      "description": "Water oxygen",
+      "probe_types": ["Wat"],
+      "probability": 0.003334606313608672
     },
     {
       "name": "N",
       "residue": "ANT",
-      "atoms": [
-        "N1"
-      ],
-      "description": "Hydrogen bond acceptor"
+      "atoms": ["N1"],
+      "description": "Hydrogen bond acceptor",
+      "probe_types": ["Acc"],
+      "probability": 0.00027123592024568146
     },
     {
       "name": "C",
       "residue": "ANT",
-      "atoms": [
-        "C3"
-      ],
-      "description": "Hydrophobic"
+      "atoms": ["C3"],
+      "description": "Hydrophobic",
+      "probe_types": ["Hyd"],
+      "probability": 0.00027123592024568146
     }
   ]
 }
