@@ -252,14 +252,14 @@ def residue_to_atom_property(struct, values: list) -> np.ndarray:
 | - | `analysis/residence.py` | Residence time analysis |
 | - | `analysis/hotspots.py` | Basic hotspot detection |
 
-### ❌ NOT YET PORTED (2 modules)
+### ✅ ALL CORE MODULES PORTED
 
-| Legacy | Status | Priority |
-|--------|--------|----------|
-| `MDSettings.py` | ✅ DONE → `project/settings.py` | P1 |
-| `Analysis.py` | ✅ DONE → `analysis/manager.py` | P1 |
-| `PDB.py` | Not needed (covered by structure.py) | P2 |
-| `HotSpotsManager.py` | Partial (clustering missing) | P1 |
+| Legacy | Status | New Location |
+|--------|--------|--------------|
+| `MDSettings.py` | ✅ DONE | `project/settings.py` |
+| `Analysis.py` | ✅ DONE | `analysis/manager.py` |
+| `HotSpotsManager.py` | ✅ DONE | `analysis/hotspots.py` (HotSpotSet added) |
+| `PDB.py` | ✅ Not needed | Covered by `structure.py` |
 
 ---
 
@@ -490,7 +490,7 @@ def generate_ss_leap_commands(
 
 ## Testing
 
-Current: **604 tests passing** (updated 2026-03-22 15:50)
+Current: **626 tests passing** (updated 2026-03-22 16:00)
 
 Each new module needs:
 - Unit tests in `tests/test_<module>.py`
@@ -536,8 +536,8 @@ Update this section as work progresses:
 | 2026-03-21 | Solvent library, CLI, tests |
 | 2026-03-22 AM | Expanded replica, amber, grid; repo consolidation; Biskit audit |
 | 2026-03-22 PM | **Biskit replacement COMPLETE**: 18 new functions in structure.py + amber.py |
-| 2026-03-22 PM | **MDSettings** ✅ + **ActionsManager** ✅ implemented (604 tests) |
-| Next | HotSpot clustering |
+| 2026-03-22 PM | **MDSettings** ✅ + **ActionsManager** ✅ + **HotSpotSet** ✅ (626 tests) |
+| Next | Integration testing, CLI wiring |
 
 ---
 
