@@ -4,41 +4,37 @@ Tests for pymdmix.setup.prepare module.
 Tests PQR parsing, PDB cleaning, capping, and AutoPrepare workflow.
 """
 
-import pytest
-import numpy as np
 from pathlib import Path
-import tempfile
 
+import numpy as np
 import parmed
+import pytest
 
 from pymdmix.setup.prepare import (
-    # PQR parsing
-    PQRParseFile,
-    PQRAtom,
-    # Structure preparation
-    prepare_structure,
-    PrepareResult,
-    add_caps,
-    find_and_fix_disulfides,
-    remove_clashing_waters,
-    renumber_residues,
-    standardize_atom_names,
-    center_structure,
-    _find_protein_chains,
     # Cleaning
     AmberPDBCleaner,
     # Workflow
     AutoPrepare,
     AutoPrepareError,
-    # PDB2PQR
     PDB2PQRInterface,
-    PDB2PQRError,
+    PQRParseFile,
+    PrepareResult,
+    StructurePreparationOptions,
+    _find_protein_chains,
+    add_caps,
+    center_structure,
+    find_and_fix_disulfides,
+    # Structure preparation
+    prepare_structure,
+    remove_clashing_waters,
+    renumber_residues,
+    standardize_atom_names,
 )
-
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def pqr_content():
@@ -181,13 +177,14 @@ def water_pdb_file(tmp_path, water_pdb_content):
 # PQRParseFile Tests
 # ============================================================================
 
+
 class TestPQRParseFile:
     """Tests for PQR file parsing."""
-    
+
     def test_parse_pqr_with_chain(self, pqr_file):
         """Test parsing PQR file with chain ID."""
         parser = PQRParseFile(pqr_file)
-        
+
         assert len(parser.atoms) == 10
         assert parser.atoms[0].name == "N"
         assert parser.atoms[0].residue_name == "ALA"
@@ -195,37 +192,37 @@ class TestPQRParseFile:
         assert parser.atoms[0].residue_number == 1
         assert parser.atoms[0].charge == pytest.approx(0.0577)
         assert parser.atoms[0].radius == pytest.approx(1.8240)
-    
+
     def test_parse_pqr_without_chain(self, pqr_no_chain_file):
         """Test parsing PQR file without chain ID."""
         parser = PQRParseFile(pqr_no_chain_file)
-        
+
         assert len(parser.atoms) == 3
         assert parser.atoms[0].chain_id == ""
-    
+
     def test_get_model(self, pqr_file):
         """Test converting to parmed Structure."""
         parser = PQRParseFile(pqr_file)
         struct = parser.get_model()
-        
+
         assert isinstance(struct, parmed.Structure)
         assert len(struct.atoms) == 10
         assert len(struct.residues) == 2
-    
+
     def test_remarks(self, pqr_file):
         """Test REMARK lines are captured."""
         parser = PQRParseFile(pqr_file)
-        
+
         assert len(parser.remarks) >= 1
         assert any("AMBER" in r for r in parser.remarks)
-    
+
     def test_total_charge(self, pqr_file):
         """Test total charge calculation."""
         parser = PQRParseFile(pqr_file)
-        
+
         # Sum of all charges in sample
         assert parser.total_charge != 0
-    
+
     def test_file_not_found(self, tmp_path):
         """Test error on missing file."""
         with pytest.raises(FileNotFoundError):
@@ -236,64 +233,150 @@ class TestPQRParseFile:
 # Structure Preparation Tests
 # ============================================================================
 
+
 class TestPrepareStructure:
     """Tests for prepare_structure function."""
-    
+
     def test_basic_prepare(self, simple_pdb_file):
         """Test basic structure preparation."""
         struct = parmed.load_file(str(simple_pdb_file))
         result = prepare_structure(struct)
-        
+
         assert isinstance(result, PrepareResult)
         assert result.structure is not None
         assert len(result.warnings) >= 0
-    
+
     def test_remove_waters(self, water_pdb_file):
         """Test water removal."""
         struct = parmed.load_file(str(water_pdb_file))
         n_atoms_before = len(struct.atoms)
-        
+
         result = prepare_structure(struct, remove_waters=True)
-        
+
         assert result.n_waters_removed > 0
         assert len(result.structure.atoms) < n_atoms_before
-    
+
     def test_remove_hydrogens(self, simple_pdb_file):
         """Test hydrogen removal (if any present)."""
         struct = parmed.load_file(str(simple_pdb_file))
         result = prepare_structure(struct, remove_hydrogens=True)
-        
+
         # Should complete without error
         assert result.structure is not None
-    
+
     def test_fix_disulfides_flag(self, cys_pdb_file):
         """Test disulfide fixing is triggered."""
         struct = parmed.load_file(str(cys_pdb_file))
         result = prepare_structure(struct, fix_disulfides=True)
-        
+
         # With close SG atoms, should find disulfides
         # Note: depends on actual coordinates
         assert result.structure is not None
 
+    def test_prepare_with_options_object(self, simple_pdb_file):
+        """Test prepare_structure accepts StructurePreparationOptions."""
+        struct = parmed.load_file(str(simple_pdb_file))
+        options = StructurePreparationOptions(
+            add_caps=True,
+            detect_disulfides=True,
+            remove_waters=False,
+            remove_hydrogens=False,
+        )
+        result = prepare_structure(struct, options=options)
+
+        assert isinstance(result, PrepareResult)
+        assert result.structure is not None
+
+    def test_options_override_kwargs(self, water_pdb_file):
+        """Options object takes precedence over individual keyword args."""
+        struct = parmed.load_file(str(water_pdb_file))
+        options = StructurePreparationOptions(remove_waters=True)
+        # Pass conflicting kwarg — options should win
+        result = prepare_structure(struct, options=options, remove_waters=False)
+
+        assert result.n_waters_removed > 0
+
+    def test_prepare_from_path(self, simple_pdb_file):
+        """Test prepare_structure accepts a Path directly."""
+        result = prepare_structure(simple_pdb_file)
+
+        assert isinstance(result, PrepareResult)
+        assert result.structure is not None
+
+    def test_modifications_list_populated(self, water_pdb_file):
+        """PrepareResult.modifications records human-readable changes."""
+        struct = parmed.load_file(str(water_pdb_file))
+        result = prepare_structure(struct, remove_waters=True)
+
+        assert isinstance(result.modifications, list)
+        # At least one modification describing water removal
+        assert any("water" in m.lower() or "removed" in m.lower() for m in result.modifications)
+
+    def test_modifications_empty_when_no_changes(self, simple_pdb_file):
+        """modifications list is empty when no changes are made."""
+        struct = parmed.load_file(str(simple_pdb_file))
+        result = prepare_structure(
+            struct,
+            cap_termini=False,
+            fix_disulfides=False,
+            remove_waters=False,
+            remove_hydrogens=False,
+        )
+
+        # May still be empty or only contain cap info — just check it's a list
+        assert isinstance(result.modifications, list)
+
+
+class TestStructurePreparationOptions:
+    """Tests for StructurePreparationOptions dataclass."""
+
+    def test_defaults(self):
+        """Test default option values."""
+        opts = StructurePreparationOptions()
+
+        assert opts.add_caps is True
+        assert opts.detect_disulfides is True
+        assert opts.remove_waters is True
+        assert opts.remove_hydrogens is False
+        assert opts.custom_patches == []
+
+    def test_custom_options(self):
+        """Test creating with custom values."""
+        opts = StructurePreparationOptions(
+            add_caps=False,
+            detect_disulfides=False,
+            remove_waters=True,
+            remove_hydrogens=True,
+        )
+
+        assert opts.add_caps is False
+        assert opts.remove_hydrogens is True
+
+    def test_custom_patches(self):
+        """Test custom_patches list."""
+        opts = StructurePreparationOptions(custom_patches=["patch NTERM mol 1"])
+
+        assert len(opts.custom_patches) == 1
+
 
 class TestFindProteinChains:
     """Tests for chain finding."""
-    
+
     def test_single_chain(self, simple_pdb_file):
         """Test finding single protein chain."""
         struct = parmed.load_file(str(simple_pdb_file))
         chains = _find_protein_chains(struct)
-        
+
         assert len(chains) == 1
         start, end = chains[0]
         assert start == 0
         assert end == len(struct.residues) - 1
-    
+
     def test_with_waters(self, water_pdb_file):
         """Test chain finding excludes waters."""
         struct = parmed.load_file(str(water_pdb_file))
         chains = _find_protein_chains(struct)
-        
+
         # Should find protein chain, not waters
         assert len(chains) >= 1
         # First chain should be protein (ALA)
@@ -303,23 +386,23 @@ class TestFindProteinChains:
 
 class TestAddCaps:
     """Tests for cap addition."""
-    
+
     def test_caps_needed_count(self, simple_pdb_file):
         """Test counting caps needed."""
         struct = parmed.load_file(str(simple_pdb_file))
         n_caps = add_caps(struct)
-        
+
         # Single chain needs ACE and NME = 2 caps
         assert n_caps == 2
-    
+
     def test_caps_optional(self, simple_pdb_file):
         """Test optional capping."""
         struct = parmed.load_file(str(simple_pdb_file))
-        
+
         # N-terminal only
         n_caps = add_caps(struct, cap_n=True, cap_c=False)
         assert n_caps == 1
-        
+
         # C-terminal only
         n_caps = add_caps(struct, cap_n=False, cap_c=True)
         assert n_caps == 1
@@ -327,90 +410,87 @@ class TestAddCaps:
 
 class TestDisulfides:
     """Tests for disulfide handling."""
-    
+
     def test_find_and_fix(self, cys_pdb_file):
         """Test finding and fixing disulfides."""
         struct = parmed.load_file(str(cys_pdb_file))
-        
+
         # Check initial state
         cys_names = [r.name for r in struct.residues if "CY" in r.name]
         assert "CYS" in cys_names
-        
+
         # Find and fix
         disulfides = find_and_fix_disulfides(struct, cutoff=3.0)
-        
+
         # Note: whether disulfides are found depends on actual SG distances
         assert isinstance(disulfides, list)
 
 
 class TestRenumberResidues:
     """Tests for residue renumbering."""
-    
+
     def test_renumber_from_1(self, simple_pdb_file):
         """Test renumbering from 1."""
         struct = parmed.load_file(str(simple_pdb_file))
         renumber_residues(struct, start=1)
-        
+
         numbers = [r.number for r in struct.residues]
         assert numbers == list(range(1, len(struct.residues) + 1))
-    
+
     def test_renumber_from_custom(self, simple_pdb_file):
         """Test renumbering from custom start."""
         struct = parmed.load_file(str(simple_pdb_file))
         renumber_residues(struct, start=100)
-        
+
         assert struct.residues[0].number == 100
 
 
 class TestStandardizeAtomNames:
     """Tests for atom name standardization."""
-    
+
     def test_rename_hn(self, simple_pdb_file):
         """Test HN -> H rename."""
         struct = parmed.load_file(str(simple_pdb_file))
-        
+
         # Manually add HN atom for testing
         # (This is a unit test; real PDB may not have HN)
         n_renamed = standardize_atom_names(struct)
-        
+
         # Should complete without error
         assert n_renamed >= 0
 
 
 class TestCenterStructure:
     """Tests for structure centering."""
-    
+
     def test_center_at_origin(self, simple_pdb_file):
         """Test centering moves center to origin."""
         struct = parmed.load_file(str(simple_pdb_file))
-        
+
         # Center
         center_structure(struct)
-        
+
         # Check center is at origin
         coords = struct.coordinates
         center = coords.mean(axis=0)
-        
+
         assert np.allclose(center, [0, 0, 0], atol=1e-6)
 
 
 class TestRemoveClashingWaters:
     """Tests for clashing water removal."""
-    
+
     def test_remove_close_waters(self, water_pdb_file):
         """Test removal of waters too close to solute."""
         struct = parmed.load_file(str(water_pdb_file))
-        
+
         # Get solute coordinates (protein only)
-        solute_coords = np.array([
-            [a.xx, a.xy, a.xz] for a in struct.atoms
-            if a.residue.name not in ("WAT", "HOH")
-        ])
-        
-        result = remove_clashing_waters(
-            struct, solute_coords, clash_distance=5.0
+        solute_coords = np.array(
+            [[a.xx, a.xy, a.xz] for a in struct.atoms if a.residue.name not in ("WAT", "HOH")]
         )
-        
+
+        result = remove_clashing_waters(struct, solute_coords, clash_distance=5.0)
+
         # Waters far away should remain
         assert len(result.atoms) >= 0
 
@@ -419,44 +499,45 @@ class TestRemoveClashingWaters:
 # AmberPDBCleaner Tests
 # ============================================================================
 
+
 class TestAmberPDBCleaner:
     """Tests for AmberPDBCleaner class."""
-    
+
     def test_init(self, simple_pdb_file):
         """Test cleaner initialization."""
         struct = parmed.load_file(str(simple_pdb_file))
         cleaner = AmberPDBCleaner(struct)
-        
+
         assert cleaner.structure is not None
         assert cleaner.verbose is True
-    
+
     def test_clean_basic(self, simple_pdb_file):
         """Test basic cleaning."""
         struct = parmed.load_file(str(simple_pdb_file))
         cleaner = AmberPDBCleaner(struct)
-        
+
         cleaned = cleaner.clean_pdb(cap=False)
-        
+
         assert isinstance(cleaned, parmed.Structure)
         assert len(cleaned.atoms) > 0
-    
+
     def test_clean_with_waters(self, water_pdb_file):
         """Test cleaning keeps waters by default."""
         struct = parmed.load_file(str(water_pdb_file))
         cleaner = AmberPDBCleaner(struct)
-        
+
         cleaned = cleaner.clean_pdb(keep_waters=True, cap=False)
-        
+
         # Should still have some residues
         assert len(cleaned.residues) > 0
-    
+
     def test_clean_remove_waters(self, water_pdb_file):
         """Test cleaning can remove waters."""
         struct = parmed.load_file(str(water_pdb_file))
         cleaner = AmberPDBCleaner(struct)
-        
+
         cleaned = cleaner.clean_pdb(keep_waters=False, cap=False)
-        
+
         # Check no water residues
         water_names = {"WAT", "HOH", "TIP3"}
         res_names = {r.name for r in cleaned.residues}
@@ -467,88 +548,90 @@ class TestAmberPDBCleaner:
 # AutoPrepare Tests
 # ============================================================================
 
+
 class TestAutoPrepare:
     """Tests for AutoPrepare workflow class."""
-    
+
     def test_init_from_file(self, simple_pdb_file):
         """Test initialization from PDB file."""
         prep = AutoPrepare(str(simple_pdb_file), cap=False)
-        
+
         assert prep.pdb is not None
         assert len(prep.pdb.atoms) > 0
-    
+
     def test_init_from_path(self, simple_pdb_file):
         """Test initialization from Path object."""
         from pathlib import Path
+
         prep = AutoPrepare(Path(simple_pdb_file), cap=False)
-        
+
         assert prep.pdb is not None
-    
+
     def test_init_from_structure(self, simple_pdb_file):
         """Test initialization from parmed Structure."""
         struct = parmed.load_file(str(simple_pdb_file))
         prep = AutoPrepare(struct, cap=False)
-        
+
         assert prep.pdb is not None
-    
+
     def test_set_pdb(self, simple_pdb_file):
         """Test set_pdb method."""
         prep = AutoPrepare()
-        
+
         assert prep.pdb is None
-        
+
         prep.set_pdb(simple_pdb_file)
-        
+
         assert prep.pdb is not None
-    
+
     def test_get_pdb(self, simple_pdb_file):
         """Test get_pdb method."""
         prep = AutoPrepare(simple_pdb_file, cap=False)
-        
+
         pdb = prep.get_pdb()
-        
+
         assert pdb is prep.pdb
-    
+
     def test_save_pdb(self, simple_pdb_file, tmp_path):
         """Test save_pdb method."""
         prep = AutoPrepare(simple_pdb_file, cap=False)
-        
+
         out_path = tmp_path / "output.pdb"
         result = prep.save_pdb(out_path)
-        
+
         assert result == out_path
         assert out_path.exists()
-        
+
         # Verify saved file is valid
         loaded = parmed.load_file(str(out_path))
         assert len(loaded.atoms) > 0
-    
+
     def test_save_pdb_no_structure(self):
         """Test save_pdb raises error with no structure."""
         prep = AutoPrepare()
-        
+
         with pytest.raises(AutoPrepareError):
             prep.save_pdb("/tmp/test.pdb")
-    
+
     def test_clean_pdb(self, simple_pdb_file):
         """Test clean_pdb method."""
         struct = parmed.load_file(str(simple_pdb_file))
         prep = AutoPrepare()
         prep.set_pdb(struct)
-        
+
         prep.clean_pdb(cap=False)
-        
+
         assert prep.pdb is not None
-    
+
     def test_file_not_found(self):
         """Test error on missing file."""
         with pytest.raises(FileNotFoundError):
             AutoPrepare("/nonexistent/path.pdb")
-    
+
     def test_with_waters(self, water_pdb_file):
         """Test preparation with waters."""
         prep = AutoPrepare(water_pdb_file, keep_waters=True, cap=False)
-        
+
         assert prep.pdb is not None
         # Should have residues
         assert len(prep.pdb.residues) > 0
@@ -558,9 +641,10 @@ class TestAutoPrepare:
 # PDB2PQRInterface Tests (Offline)
 # ============================================================================
 
+
 class TestPDB2PQRInterface:
     """Tests for PDB2PQR interface (offline/mock tests)."""
-    
+
     def test_init(self):
         """Test interface initialization."""
         try:
@@ -568,7 +652,7 @@ class TestPDB2PQRInterface:
             assert interface.server_url is not None
         except ImportError:
             pytest.skip("requests library not available")
-    
+
     def test_custom_server(self):
         """Test custom server URL."""
         try:
@@ -576,7 +660,7 @@ class TestPDB2PQRInterface:
             assert interface.server_url == "https://custom.server.com"
         except ImportError:
             pytest.skip("requests library not available")
-    
+
     def test_protonate_requires_input(self):
         """Test that protonate requires pdbfile or pdbid."""
         try:
@@ -585,7 +669,7 @@ class TestPDB2PQRInterface:
                 interface.protonate_pdb()  # No input
         except ImportError:
             pytest.skip("requests library not available")
-    
+
     def test_protonate_file_not_found(self, tmp_path):
         """Test error on missing PDB file."""
         try:
@@ -600,9 +684,10 @@ class TestPDB2PQRInterface:
 # Integration Tests with Real Data
 # ============================================================================
 
+
 class TestRealDataIntegration:
     """Integration tests using real test data files."""
-    
+
     @pytest.fixture
     def test_data_dir(self):
         """Path to test data directory."""
@@ -610,51 +695,51 @@ class TestRealDataIntegration:
         if not data_dir.exists():
             pytest.skip("Test data not available")
         return data_dir
-    
+
     def test_parse_real_pqr(self, test_data_dir):
         """Test parsing real PQR file."""
         pqr_file = test_data_dir / "1yer.pqr"
         if not pqr_file.exists():
             pytest.skip("1yer.pqr not available")
-        
+
         parser = PQRParseFile(pqr_file)
         struct = parser.get_model()
-        
+
         assert len(struct.atoms) > 100  # 1yer has many atoms
         assert len(struct.residues) > 10
-    
+
     def test_load_real_pdb(self, test_data_dir):
         """Test loading real PDB file."""
         pdb_file = test_data_dir / "1yer.pdb"
         if not pdb_file.exists():
             pytest.skip("1yer.pdb not available")
-        
+
         struct = parmed.load_file(str(pdb_file))
-        
+
         assert len(struct.atoms) > 0
-    
+
     def test_prepare_real_pdb(self, test_data_dir):
         """Test preparing real PDB file."""
         pdb_file = test_data_dir / "1yer.pdb"
         if not pdb_file.exists():
             pytest.skip("1yer.pdb not available")
-        
+
         struct = parmed.load_file(str(pdb_file))
         result = prepare_structure(struct, cap_termini=True)
-        
+
         assert result.structure is not None
         assert len(result.structure.atoms) > 0
-    
+
     def test_autoprepare_real_pdb(self, test_data_dir, tmp_path):
         """Test AutoPrepare with real PDB file."""
         pdb_file = test_data_dir / "1yer.pdb"
         if not pdb_file.exists():
             pytest.skip("1yer.pdb not available")
-        
+
         prep = AutoPrepare(str(pdb_file), keep_waters=False, cap=True)
-        
+
         assert prep.pdb is not None
-        
+
         # Save and verify
         out_path = tmp_path / "1yer_prepared.pdb"
         prep.save_pdb(out_path)
@@ -665,26 +750,27 @@ class TestRealDataIntegration:
 # Edge Cases and Error Handling
 # ============================================================================
 
+
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
-    
+
     def test_empty_structure(self):
         """Test handling of empty structure."""
         struct = parmed.Structure()
         result = prepare_structure(struct)
-        
+
         assert result.structure is not None
         assert len(result.structure.atoms) == 0
-    
+
     def test_autoprepare_empty_init(self):
         """Test AutoPrepare with no input."""
         prep = AutoPrepare()
-        
+
         assert prep.pdb is None
-    
+
     def test_clean_pdb_no_structure(self):
         """Test clean_pdb with no structure loaded."""
         prep = AutoPrepare()
-        
+
         with pytest.raises(AutoPrepareError):
             prep.clean_pdb()

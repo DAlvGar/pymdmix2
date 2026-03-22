@@ -11,29 +11,33 @@ Note:
     matplotlib is an optional dependency. Functions will raise ImportError
     if matplotlib is not available.
 """
+
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
+
     from pymdmix.core.grid import Grid
 
 # Type aliases
-ArrayLike = Union[np.ndarray, Sequence]
+ArrayLike = np.ndarray | Sequence
 
 
 def _check_matplotlib():
     """Check if matplotlib is available."""
     try:
         import matplotlib.pyplot as plt
+
         return plt
     except ImportError:
         raise ImportError(
-            "matplotlib is required for plotting. "
-            "Install with: pip install matplotlib"
+            "matplotlib is required for plotting. Install with: pip install matplotlib"
         )
 
 
@@ -41,18 +45,19 @@ def _check_matplotlib():
 # Energy Grid Visualization
 # =============================================================================
 
+
 def plot_energy_grid(
-    grid: "Grid",
+    grid: Grid,
     axis: int = 2,
-    level: Optional[float] = None,
+    level: float | None = None,
     cmap: str = "RdBu_r",
-    vmin: Optional[float] = None,
-    vmax: Optional[float] = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
     colorbar: bool = True,
-    title: Optional[str] = None,
-    output: Optional[Union[str, Path]] = None,
-    figsize: Tuple[float, float] = (8, 6),
-) -> "plt.Figure":
+    title: str | None = None,
+    output: str | Path | None = None,
+    figsize: tuple[float, float] = (8, 6),
+) -> plt.Figure:
     """Plot a 2D slice of an energy grid.
 
     Args:
@@ -160,17 +165,17 @@ def plot_energy_grid(
 
 
 def plot_energy_projection(
-    grid: "Grid",
+    grid: Grid,
     axis: int = 2,
     method: str = "min",
     cmap: str = "RdBu_r",
-    vmin: Optional[float] = None,
-    vmax: Optional[float] = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
     colorbar: bool = True,
-    title: Optional[str] = None,
-    output: Optional[Union[str, Path]] = None,
-    figsize: Tuple[float, float] = (8, 6),
-) -> "plt.Figure":
+    title: str | None = None,
+    output: str | Path | None = None,
+    figsize: tuple[float, float] = (8, 6),
+) -> plt.Figure:
     """Plot a 2D projection of an energy grid.
 
     Args:
@@ -189,7 +194,6 @@ def plot_energy_projection(
         matplotlib Figure object
     """
     plt = _check_matplotlib()
-
 
     # Project data
     if method == "min":
@@ -268,16 +272,17 @@ def plot_energy_projection(
 # Convergence Analysis
 # =============================================================================
 
+
 def plot_convergence(
     values: ArrayLike,
-    time: Optional[ArrayLike] = None,
+    time: ArrayLike | None = None,
     window: int = 100,
     xlabel: str = "Frame",
     ylabel: str = "Value",
     title: str = "Convergence Analysis",
-    output: Optional[Union[str, Path]] = None,
-    figsize: Tuple[float, float] = (10, 4),
-) -> "plt.Figure":
+    output: str | Path | None = None,
+    figsize: tuple[float, float] = (10, 4),
+) -> plt.Figure:
     """Plot convergence of a property over time.
 
     Shows:
@@ -318,7 +323,7 @@ def plot_convergence(
 
     for i in range(n):
         start = max(0, i - window + 1)
-        window_data = values[start:i+1]
+        window_data = values[start : i + 1]
         running_mean[i] = np.mean(window_data)
         running_std[i] = np.std(window_data)
 
@@ -357,14 +362,14 @@ def plot_convergence(
 
 def plot_rmsd(
     rmsd: ArrayLike,
-    time: Optional[ArrayLike] = None,
-    labels: Optional[Sequence[str]] = None,
+    time: ArrayLike | None = None,
+    labels: Sequence[str] | None = None,
     xlabel: str = "Time (ns)",
     ylabel: str = "RMSD (Å)",
     title: str = "RMSD",
-    output: Optional[Union[str, Path]] = None,
-    figsize: Tuple[float, float] = (10, 4),
-) -> "plt.Figure":
+    output: str | Path | None = None,
+    figsize: tuple[float, float] = (10, 4),
+) -> plt.Figure:
     """Plot RMSD time series.
 
     Args:
@@ -393,7 +398,7 @@ def plot_rmsd(
     for i, r in enumerate(rmsd):
         r = np.asarray(r)
         t = time if time is not None else np.arange(len(r))
-        label = labels[i] if labels else f"Series {i+1}"
+        label = labels[i] if labels else f"Series {i + 1}"
         ax.plot(t, r, label=label, lw=1)
 
     ax.set_xlabel(xlabel)
@@ -417,14 +422,15 @@ def plot_rmsd(
 # Hotspot Visualization
 # =============================================================================
 
+
 def plot_hotspot_energies(
     hotspots: Sequence[dict],
     xlabel: str = "Hotspot ID",
     ylabel: str = "Energy (kcal/mol)",
     title: str = "Hotspot Energies",
-    output: Optional[Union[str, Path]] = None,
-    figsize: Tuple[float, float] = (10, 4),
-) -> "plt.Figure":
+    output: str | Path | None = None,
+    figsize: tuple[float, float] = (10, 4),
+) -> plt.Figure:
     """Plot hotspot energies as a bar chart.
 
     Args:
@@ -467,9 +473,9 @@ def plot_hotspot_energies(
 def plot_probe_distribution(
     probe_energies: dict,
     title: str = "Probe Energy Distribution",
-    output: Optional[Union[str, Path]] = None,
-    figsize: Tuple[float, float] = (10, 6),
-) -> "plt.Figure":
+    output: str | Path | None = None,
+    figsize: tuple[float, float] = (10, 6),
+) -> plt.Figure:
     """Plot distribution of energies for each probe type.
 
     Args:
@@ -517,12 +523,12 @@ def plot_probe_distribution(
 def plot_replica_rmsd(
     replica,
     project_path: Path,
-    output: Optional[Union[str, Path]] = None,
+    output: str | Path | None = None,
     **kwargs,
-) -> "plt.Figure":
+) -> plt.Figure:
     """
     Plot RMSD for a replica from its alignment output files.
-    
+
     Parameters
     ----------
     replica : Replica
@@ -531,44 +537,44 @@ def plot_replica_rmsd(
         Path to project directory
     output : Path, optional
         Output file path
-        
+
     Returns
     -------
     matplotlib.Figure
     """
-    plt = _check_matplotlib()
-    
+    _check_matplotlib()
+
     replica_path = project_path / replica.name
     align_path = replica_path / "align"
-    
+
     if not align_path.exists():
         raise FileNotFoundError(f"Alignment directory not found: {align_path}")
-    
+
     # Find RMSD files
     rmsd_files = sorted(align_path.glob("*_bb_rmsd.dat")) + sorted(align_path.glob("*_bb_rmsd.out"))
-    
+
     if not rmsd_files:
         raise FileNotFoundError(f"No RMSD files found in {align_path}")
-    
+
     # Load RMSD data
     all_rmsd = []
     for f in rmsd_files:
         try:
-            data = np.loadtxt(f, comments=['#', '@'])
+            data = np.loadtxt(f, comments=["#", "@"])
             if data.ndim == 2:
                 all_rmsd.append(data[:, 1])  # Second column is RMSD
             else:
                 all_rmsd.append(data)
         except Exception:
             continue
-    
+
     if not all_rmsd:
         raise ValueError(f"Could not load any RMSD data from {align_path}")
-    
+
     # Concatenate
     rmsd = np.concatenate(all_rmsd)
     time = np.arange(len(rmsd)) * 0.001  # Assume 1 ps timestep, convert to ns
-    
+
     return plot_rmsd(
         rmsd=rmsd,
         time=time,

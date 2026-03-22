@@ -2,11 +2,12 @@
 Shared pytest fixtures for pyMDMix tests.
 """
 
-import pytest
-import numpy as np
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pytest
 
 
 @pytest.fixture
@@ -33,17 +34,17 @@ def sample_trajectory_coords():
     np.random.seed(42)
     n_frames = 10
     n_atoms = 100
-    
+
     # Base coordinates
     base = np.random.randn(n_atoms, 3) * 10
     base += np.array([25, 25, 25])
-    
+
     # Add small perturbations for each frame
     frames = []
     for i in range(n_frames):
         perturbation = np.random.randn(n_atoms, 3) * 0.5
         frames.append((base + perturbation).astype(np.float64))
-    
+
     return frames
 
 
@@ -115,24 +116,25 @@ def sample_dx_file(tmp_output_dir, sample_dx_content):
 
 class MockTrajectoryReader:
     """Mock trajectory reader for testing without real files."""
-    
+
     def __init__(self, frames: list[np.ndarray]):
         self._frames = frames
         self._n_atoms = frames[0].shape[0] if frames else 0
-    
+
     @property
     def n_frames(self) -> int:
         return len(self._frames)
-    
+
     @property
     def n_atoms(self) -> int:
         return self._n_atoms
-    
+
     def __len__(self) -> int:
         return self.n_frames
-    
+
     def __iter__(self):
         from pymdmix.core.trajectory import Frame
+
         for coords in self._frames:
             yield Frame(coordinates=coords)
 

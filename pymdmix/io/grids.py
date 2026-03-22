@@ -8,13 +8,14 @@ Supports:
 The DX format is the primary format used by pyMDMix.
 MRC support allows interoperability with visualization tools like ChimeraX.
 """
+
 from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Tuple, Union
+
 import numpy as np
 
 from pymdmix.core.grid import Grid
@@ -22,12 +23,13 @@ from pymdmix.core.grid import Grid
 
 class GridFormat(Enum):
     """Supported grid file formats."""
+
     DX = "dx"
     MRC = "mrc"
     CCP4 = "ccp4"
 
     @classmethod
-    def from_path(cls, path: Union[str, Path]) -> "GridFormat":
+    def from_path(cls, path: str | Path) -> GridFormat:
         """Detect format from file extension."""
         suffix = Path(path).suffix.lower().lstrip(".")
         if suffix in ("dx", "opendx"):
@@ -42,7 +44,8 @@ class GridFormat(Enum):
 # DX Format (OpenDX)
 # =============================================================================
 
-def read_dx(path: Union[str, Path]) -> Grid:
+
+def read_dx(path: str | Path) -> Grid:
     """Read a DX format grid file.
 
     Args:
@@ -57,7 +60,7 @@ def read_dx(path: Union[str, Path]) -> Grid:
     return Grid.read_dx(Path(path))
 
 
-def write_dx(grid: Grid, path: Union[str, Path], precision: int = 6) -> None:
+def write_dx(grid: Grid, path: str | Path, precision: int = 6) -> None:
     """Write a grid to DX format.
 
     Args:
@@ -75,9 +78,11 @@ def write_dx(grid: Grid, path: Union[str, Path], precision: int = 6) -> None:
 # MRC/CCP4 Format
 # =============================================================================
 
+
 @dataclass
 class MRCHeader:
     """MRC file header information."""
+
     nx: int
     ny: int
     nz: int
@@ -102,10 +107,10 @@ class MRCHeader:
     dmean: float
     ispg: int  # Space group
     nsymbt: int  # Extended header size
-    origin: Tuple[float, float, float]
+    origin: tuple[float, float, float]
 
 
-def read_mrc(path: Union[str, Path]) -> Grid:
+def read_mrc(path: str | Path) -> Grid:
     """Read an MRC/CCP4 format grid file.
 
     Args:
@@ -134,34 +139,34 @@ def read_mrc(path: Union[str, Path]) -> Grid:
         # Detect endianness from machine stamp (bytes 212-215)
         machine_stamp = header_data[212:216]
 
-        if machine_stamp[0:2] == b'\x44\x44':
-            endian = '<'  # Little endian
-        elif machine_stamp[0:2] == b'\x11\x11':
-            endian = '>'  # Big endian
+        if machine_stamp[0:2] == b"\x44\x44":
+            endian = "<"  # Little endian
+        elif machine_stamp[0:2] == b"\x11\x11":
+            endian = ">"  # Big endian
         else:
             # Try to detect from NX value
-            nx_le = struct.unpack('<i', header_data[0:4])[0]
-            endian = '<' if 0 < nx_le < 10000 else '>'
+            nx_le = struct.unpack("<i", header_data[0:4])[0]
+            endian = "<" if 0 < nx_le < 10000 else ">"
 
         # Parse header
-        nx, ny, nz = struct.unpack(endian + 'iii', header_data[0:12])
-        mode = struct.unpack(endian + 'i', header_data[12:16])[0]
+        nx, ny, nz = struct.unpack(endian + "iii", header_data[0:12])
+        mode = struct.unpack(endian + "i", header_data[12:16])[0]
 
         if mode != 2:
             raise ValueError(f"Only mode 2 (float32) supported, got mode {mode}")
 
         # Grid start indices
-        nxstart, nystart, nzstart = struct.unpack(endian + 'iii', header_data[16:28])
+        nxstart, nystart, nzstart = struct.unpack(endian + "iii", header_data[16:28])
 
         # Unit cell dimensions
-        mx, my, mz = struct.unpack(endian + 'iii', header_data[28:40])
-        xlen, ylen, zlen = struct.unpack(endian + 'fff', header_data[40:52])
+        mx, my, mz = struct.unpack(endian + "iii", header_data[28:40])
+        xlen, ylen, zlen = struct.unpack(endian + "fff", header_data[40:52])
 
         # Extended header size
-        nsymbt = struct.unpack(endian + 'i', header_data[92:96])[0]
+        nsymbt = struct.unpack(endian + "i", header_data[92:96])[0]
 
         # Origin (MRC2014 style, bytes 196-207)
-        origin = struct.unpack(endian + 'fff', header_data[196:208])
+        origin = struct.unpack(endian + "fff", header_data[196:208])
 
         # Skip extended header
         if nsymbt > 0:
@@ -175,7 +180,7 @@ def read_mrc(path: Union[str, Path]) -> Grid:
             raise ValueError(f"Incomplete data: expected {data_size}, got {len(data_bytes)}")
 
         data = np.frombuffer(data_bytes, dtype=np.float32)
-        if endian == '>':
+        if endian == ">":
             data = data.byteswap()
 
         # Reshape (MRC is column-major: X fastest, Z slowest)
@@ -206,7 +211,7 @@ def read_mrc(path: Union[str, Path]) -> Grid:
         return grid
 
 
-def write_mrc(grid: Grid, path: Union[str, Path], label: str = "pyMDMix") -> None:
+def write_mrc(grid: Grid, path: str | Path, label: str = "pyMDMix") -> None:
     """Write a grid to MRC/CCP4 format.
 
     Args:
@@ -232,60 +237,60 @@ def write_mrc(grid: Grid, path: Union[str, Path], label: str = "pyMDMix") -> Non
         header = bytearray(1024)
 
         # NX, NY, NZ (columns, rows, sections)
-        struct.pack_into('<iii', header, 0, nx, ny, nz)
+        struct.pack_into("<iii", header, 0, nx, ny, nz)
 
         # Mode (2 = float32)
-        struct.pack_into('<i', header, 12, 2)
+        struct.pack_into("<i", header, 12, 2)
 
         # Start indices (0)
-        struct.pack_into('<iii', header, 16, 0, 0, 0)
+        struct.pack_into("<iii", header, 16, 0, 0, 0)
 
         # Grid sampling (same as dimensions)
-        struct.pack_into('<iii', header, 28, nx, ny, nz)
+        struct.pack_into("<iii", header, 28, nx, ny, nz)
 
         # Cell dimensions in Angstroms (uniform spacing)
         xlen = nx * spacing
         ylen = ny * spacing
         zlen = nz * spacing
-        struct.pack_into('<fff', header, 40, xlen, ylen, zlen)
+        struct.pack_into("<fff", header, 40, xlen, ylen, zlen)
 
         # Cell angles (90, 90, 90 for orthogonal)
-        struct.pack_into('<fff', header, 52, 90.0, 90.0, 90.0)
+        struct.pack_into("<fff", header, 52, 90.0, 90.0, 90.0)
 
         # Axis mapping (1=X, 2=Y, 3=Z)
-        struct.pack_into('<iii', header, 64, 1, 2, 3)
+        struct.pack_into("<iii", header, 64, 1, 2, 3)
 
         # Statistics
         dmin = float(data.min())
         dmax = float(data.max())
         dmean = float(data.mean())
-        struct.pack_into('<fff', header, 76, dmin, dmax, dmean)
+        struct.pack_into("<fff", header, 76, dmin, dmax, dmean)
 
         # Space group (1 for P1)
-        struct.pack_into('<i', header, 88, 1)
+        struct.pack_into("<i", header, 88, 1)
 
         # Extended header size (0)
-        struct.pack_into('<i', header, 92, 0)
+        struct.pack_into("<i", header, 92, 0)
 
         # MRC2014 marker
-        header[104:108] = b'MAP '
+        header[104:108] = b"MAP "
 
         # Machine stamp (little-endian)
-        header[212:216] = b'\x44\x44\x00\x00'
+        header[212:216] = b"\x44\x44\x00\x00"
 
         # RMS deviation
         rms = float(data.std())
-        struct.pack_into('<f', header, 216, rms)
+        struct.pack_into("<f", header, 216, rms)
 
         # Number of labels
-        struct.pack_into('<i', header, 220, 1)
+        struct.pack_into("<i", header, 220, 1)
 
         # Label (80 chars)
-        label_bytes = label[:80].ljust(80).encode('ascii', errors='replace')
+        label_bytes = label[:80].ljust(80).encode("ascii", errors="replace")
         header[224:304] = label_bytes
 
         # Origin (MRC2014 style)
-        struct.pack_into('<fff', header, 196, ox, oy, oz)
+        struct.pack_into("<fff", header, 196, ox, oy, oz)
 
         f.write(header)
 
@@ -297,10 +302,11 @@ def write_mrc(grid: Grid, path: Union[str, Path], label: str = "pyMDMix") -> Non
 # Format Conversion
 # =============================================================================
 
+
 def convert_grid(
-    input_path: Union[str, Path],
-    output_path: Union[str, Path],
-    output_format: Optional[GridFormat] = None,
+    input_path: str | Path,
+    output_path: str | Path,
+    output_format: GridFormat | None = None,
 ) -> None:
     """Convert a grid between formats.
 
@@ -342,7 +348,8 @@ def convert_grid(
 # Utilities
 # =============================================================================
 
-def grid_info(path: Union[str, Path]) -> dict:
+
+def grid_info(path: str | Path) -> dict:
     """Get information about a grid file without loading all data.
 
     Args:
@@ -385,17 +392,17 @@ def grid_info(path: Union[str, Path]) -> dict:
     elif fmt in (GridFormat.MRC, GridFormat.CCP4):
         with open(path, "rb") as f:
             header = f.read(1024)
-            nx, ny, nz = struct.unpack('<iii', header[0:12])
-            xlen, ylen, zlen = struct.unpack('<fff', header[40:52])
-            origin = struct.unpack('<fff', header[196:208])
-            dmin, dmax, dmean = struct.unpack('<fff', header[76:88])
+            nx, ny, nz = struct.unpack("<iii", header[0:12])
+            xlen, ylen, zlen = struct.unpack("<fff", header[40:52])
+            origin = struct.unpack("<fff", header[196:208])
+            dmin, dmax, dmean = struct.unpack("<fff", header[76:88])
 
             return {
                 "format": "MRC",
                 "shape": (nx, ny, nz),
                 "origin": origin,
                 "cell_dimensions": (xlen, ylen, zlen),
-                "spacing": (xlen/nx + ylen/ny + zlen/nz) / 3.0,
+                "spacing": (xlen / nx + ylen / ny + zlen / nz) / 3.0,
                 "min": dmin,
                 "max": dmax,
                 "mean": dmean,

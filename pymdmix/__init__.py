@@ -18,8 +18,8 @@ __version__ = "0.3.0"
 __author__ = "Daniel Alvarez-Garcia"
 
 from pymdmix.core.grid import Grid
-from pymdmix.core.trajectory import open_trajectory, Frame
 from pymdmix.core.structure import load_structure
+from pymdmix.core.trajectory import Frame, open_trajectory
 
 __all__ = [
     "Grid",

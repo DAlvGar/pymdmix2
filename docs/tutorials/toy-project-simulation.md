@@ -262,13 +262,13 @@ BPTI is a trypsin inhibitor with a well-characterized binding loop. You should s
 
 You've completed a full MDMix analysis:
 
-✅ Created project and replicas  
-✅ Ran MD simulations  
-✅ Aligned trajectories  
-✅ Calculated density grids  
-✅ Converted to energy maps  
-✅ Detected binding hotspots  
-✅ Visualized results  
+✅ Created project and replicas
+✅ Ran MD simulations
+✅ Aligned trajectories
+✅ Calculated density grids
+✅ Converted to energy maps
+✅ Detected binding hotspots
+✅ Visualized results
 
 ---
 

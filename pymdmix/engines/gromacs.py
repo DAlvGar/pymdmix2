@@ -11,16 +11,14 @@ Examples
 >>> engine = GromacsEngine()
 >>> engine.write_minimization("system.top", "system.gro", "min.mdp")
 """
+
 from __future__ import annotations
 
 import logging
 import re
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
-
-import numpy as np
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +27,7 @@ log = logging.getLogger(__name__)
 class GromacsConfig:
     """
     GROMACS simulation configuration.
-    
+
     Attributes
     ----------
     timestep : float
@@ -53,6 +51,7 @@ class GromacsConfig:
     gpu_id : str
         GPU device ID(s)
     """
+
     timestep: float = 2.0  # fs
     temperature: float = 300.0
     pressure: float = 1.0
@@ -63,10 +62,10 @@ class GromacsConfig:
     compressibility: float = 4.5e-5  # bar^-1
     num_threads: int = 0  # 0 = auto
     gpu_id: str = "0"
-    
+
     # Restraint settings
     restraint_force: float = 1000.0  # kJ/mol/nm^2
-    
+
     # Output frequencies (steps)
     nstlog: int = 5000
     nstxout: int = 0  # full precision coords
@@ -79,15 +78,15 @@ class GromacsConfig:
 class GromacsEngine:
     """
     GROMACS simulation engine for MDMix.
-    
+
     Generates GROMACS MDP files and handles topology conversion
     from Amber format.
     """
-    
+
     def __init__(self, config: GromacsConfig | None = None):
         self.config = config or GromacsConfig()
         self.log = logging.getLogger(self.__class__.__name__)
-    
+
     def convert_amber_to_gromacs(
         self,
         prmtop: str | Path,
@@ -97,7 +96,7 @@ class GromacsEngine:
     ) -> tuple[Path, Path]:
         """
         Convert Amber topology to GROMACS format using parmed.
-        
+
         Parameters
         ----------
         prmtop : Path
@@ -108,7 +107,7 @@ class GromacsEngine:
             Prefix for output files
         output_dir : Path, optional
             Output directory
-            
+
         Returns
         -------
         tuple[Path, Path]
@@ -117,31 +116,31 @@ class GromacsEngine:
         prmtop = Path(prmtop)
         inpcrd = Path(inpcrd)
         output_dir = Path(output_dir) if output_dir else prmtop.parent
-        
+
         try:
             import parmed as pmd
         except ImportError:
             raise ImportError("parmed required for Amber to GROMACS conversion")
-        
+
         self.log.info(f"Converting {prmtop.name} to GROMACS format...")
-        
+
         # Load Amber structure
         amber = pmd.load_file(str(prmtop), str(inpcrd))
-        
+
         # Save GROMACS files
         top_path = output_dir / f"{output_prefix}.top"
         gro_path = output_dir / f"{output_prefix}.gro"
-        
+
         amber.save(str(top_path), overwrite=True)
         amber.save(str(gro_path), overwrite=True)
-        
+
         self.log.info(f"Created: {top_path.name}, {gro_path.name}")
-        
+
         return top_path, gro_path
-    
+
     def _get_common_mdp(self) -> str:
         """Generate common MDP parameters."""
-        return f'''; Common parameters
+        return f"""; Common parameters
 integrator              = md
 dt                      = {self.config.timestep / 1000:.4f}  ; ps
 nstlog                  = {self.config.nstlog}
@@ -169,34 +168,34 @@ lincs_order             = 4
 
 ; Periodic boundary conditions
 pbc                     = xyz
-'''
-    
+"""
+
     def _get_temperature_coupling(self, groups: str = "Protein Non-Protein") -> str:
         """Generate temperature coupling parameters."""
         group_list = groups.split()
         n_groups = len(group_list)
         temps = " ".join([str(self.config.temperature)] * n_groups)
         taus = " ".join([str(self.config.tau_t)] * n_groups)
-        
-        return f'''
+
+        return f"""
 ; Temperature coupling
 tcoupl                  = V-rescale
 tc-grps                 = {groups}
 tau_t                   = {taus}
 ref_t                   = {temps}
-'''
-    
+"""
+
     def _get_pressure_coupling(self, coupling_type: str = "Parrinello-Rahman") -> str:
         """Generate pressure coupling parameters."""
-        return f'''
+        return f"""
 ; Pressure coupling
 pcoupl                  = {coupling_type}
 pcoupltype              = isotropic
 tau_p                   = {self.config.tau_p}
 ref_p                   = {self.config.pressure}
 compressibility         = {self.config.compressibility}
-'''
-    
+"""
+
     def write_minimization(
         self,
         output: str | Path,
@@ -206,7 +205,7 @@ compressibility         = {self.config.compressibility}
     ) -> Path:
         """
         Write GROMACS minimization MDP file.
-        
+
         Parameters
         ----------
         output : Path
@@ -217,17 +216,17 @@ compressibility         = {self.config.compressibility}
             Minimization algorithm (steep, cg, l-bfgs)
         restraints : bool
             Include position restraints
-            
+
         Returns
         -------
         Path
             Path to generated MDP file
         """
         output = Path(output)
-        
+
         define = "-DPOSRES" if restraints else ""
-        
-        mdp = f'''; Minimization parameters
+
+        mdp = f"""; Minimization parameters
 define                  = {define}
 integrator              = {algorithm}
 nsteps                  = {steps}
@@ -254,12 +253,12 @@ nstlog                  = 500
 
 ; PBC
 pbc                     = xyz
-'''
-        
+"""
+
         output.write_text(mdp)
         self.log.info(f"Wrote minimization MDP: {output}")
         return output
-    
+
     def write_nvt_equilibration(
         self,
         output: str | Path,
@@ -271,7 +270,7 @@ pbc                     = xyz
     ) -> Path:
         """
         Write GROMACS NVT equilibration MDP file.
-        
+
         Parameters
         ----------
         output : Path
@@ -286,7 +285,7 @@ pbc                     = xyz
             Temperature (defaults to config value)
         tc_groups : str
             Temperature coupling groups
-            
+
         Returns
         -------
         Path
@@ -294,11 +293,11 @@ pbc                     = xyz
         """
         output = Path(output)
         temperature = temperature or self.config.temperature
-        
+
         define = "-DPOSRES" if restraints else ""
         gen_vel_str = "yes" if gen_vel else "no"
-        
-        mdp = f'''; NVT Equilibration
+
+        mdp = f"""; NVT Equilibration
 define                  = {define}
 {self._get_common_mdp()}
 nsteps                  = {steps}
@@ -312,12 +311,12 @@ gen_seed                = -1
 
 ; No pressure coupling in NVT
 pcoupl                  = no
-'''
-        
+"""
+
         output.write_text(mdp)
         self.log.info(f"Wrote NVT equilibration MDP: {output}")
         return output
-    
+
     def write_npt_equilibration(
         self,
         output: str | Path,
@@ -327,7 +326,7 @@ pcoupl                  = no
     ) -> Path:
         """
         Write GROMACS NPT equilibration MDP file.
-        
+
         Parameters
         ----------
         output : Path
@@ -338,17 +337,17 @@ pcoupl                  = no
             Include position restraints
         tc_groups : str
             Temperature coupling groups
-            
+
         Returns
         -------
         Path
             Path to generated MDP file
         """
         output = Path(output)
-        
+
         define = "-DPOSRES" if restraints else ""
-        
-        mdp = f'''; NPT Equilibration
+
+        mdp = f"""; NPT Equilibration
 define                  = {define}
 {self._get_common_mdp()}
 nsteps                  = {steps}
@@ -360,12 +359,12 @@ continuation            = yes
 {self._get_temperature_coupling(tc_groups)}
 {self._get_pressure_coupling("Berendsen")}
 refcoord_scaling        = com
-'''
-        
+"""
+
         output.write_text(mdp)
         self.log.info(f"Wrote NPT equilibration MDP: {output}")
         return output
-    
+
     def write_production(
         self,
         output: str | Path,
@@ -375,7 +374,7 @@ refcoord_scaling        = com
     ) -> Path:
         """
         Write GROMACS production MD MDP file.
-        
+
         Parameters
         ----------
         output : Path
@@ -386,21 +385,21 @@ refcoord_scaling        = com
             Ensemble type (NPT or NVT)
         tc_groups : str
             Temperature coupling groups
-            
+
         Returns
         -------
         Path
             Path to generated MDP file
         """
         output = Path(output)
-        
+
         pressure_section = ""
         if ensemble == "NPT":
             pressure_section = self._get_pressure_coupling("Parrinello-Rahman")
         else:
             pressure_section = "\n; No pressure coupling (NVT)\npcoupl                  = no\n"
-        
-        mdp = f'''; Production MD ({ensemble})
+
+        mdp = f"""; Production MD ({ensemble})
 {self._get_common_mdp()}
 nsteps                  = {steps}
 
@@ -410,12 +409,12 @@ continuation            = yes
 
 {self._get_temperature_coupling(tc_groups)}
 {pressure_section}
-'''
-        
+"""
+
         output.write_text(mdp)
         self.log.info(f"Wrote production MDP ({ensemble}): {output}")
         return output
-    
+
     def write_restraints_itp(
         self,
         gro_file: str | Path,
@@ -425,7 +424,7 @@ continuation            = yes
     ) -> Path:
         """
         Write position restraints ITP file.
-        
+
         Parameters
         ----------
         gro_file : Path
@@ -436,7 +435,7 @@ continuation            = yes
             Atom selection (protein, backbone, heavy)
         force_constant : float, optional
             Force constant in kJ/mol/nm^2
-            
+
         Returns
         -------
         Path
@@ -445,16 +444,16 @@ continuation            = yes
         gro_file = Path(gro_file)
         output = Path(output)
         force_constant = force_constant or self.config.restraint_force
-        
+
         # Parse GRO file to get atom indices
         atoms = []
         with open(gro_file) as f:
             lines = f.readlines()
             n_atoms = int(lines[1].strip())
-            for i, line in enumerate(lines[2:2+n_atoms], start=1):
+            for i, line in enumerate(lines[2 : 2 + n_atoms], start=1):
                 resname = line[5:10].strip()
                 atomname = line[10:15].strip()
-                
+
                 if selection == "protein":
                     # Include all protein heavy atoms
                     if resname not in ["WAT", "HOH", "SOL", "NA", "CL", "Na+", "Cl-"]:
@@ -466,7 +465,7 @@ continuation            = yes
                 elif selection == "heavy":
                     if not atomname.startswith("H"):
                         atoms.append(i)
-        
+
         # Write ITP
         fc = int(force_constant)
         lines = [
@@ -476,11 +475,11 @@ continuation            = yes
         ]
         for atom_idx in atoms:
             lines.append(f"   {atom_idx:5d}     1  {fc}  {fc}  {fc}")
-        
+
         output.write_text("\n".join(lines))
         self.log.info(f"Wrote restraints ITP: {output} ({len(atoms)} atoms)")
         return output
-    
+
     def create_index_groups(
         self,
         gro_file: str | Path,
@@ -489,7 +488,7 @@ continuation            = yes
     ) -> Path:
         """
         Create GROMACS index file with custom groups.
-        
+
         Parameters
         ----------
         gro_file : Path
@@ -498,7 +497,7 @@ continuation            = yes
             Output NDX file
         solvent_residues : list, optional
             Solvent residue names (e.g., ["WAT", "ETA"])
-            
+
         Returns
         -------
         Path
@@ -507,7 +506,7 @@ continuation            = yes
         gro_file = Path(gro_file)
         output = Path(output)
         solvent_residues = solvent_residues or ["WAT", "SOL", "HOH"]
-        
+
         # Use gmx make_ndx if available
         try:
             cmd = f'echo "q" | gmx make_ndx -f {gro_file} -o {output}'
@@ -517,27 +516,27 @@ continuation            = yes
                 return output
         except Exception:
             pass
-        
+
         # Fallback: create basic index file manually
         self.log.warning("gmx make_ndx not available, creating basic index")
-        
+
         # Parse GRO and create groups
         protein_atoms = []
         solvent_atoms = []
         system_atoms = []
-        
+
         with open(gro_file) as f:
             lines = f.readlines()
             n_atoms = int(lines[1].strip())
-            for i, line in enumerate(lines[2:2+n_atoms], start=1):
+            for i, line in enumerate(lines[2 : 2 + n_atoms], start=1):
                 resname = line[5:10].strip()
                 system_atoms.append(i)
-                
+
                 if resname in solvent_residues or resname in ["NA", "CL", "Na+", "Cl-"]:
                     solvent_atoms.append(i)
                 else:
                     protein_atoms.append(i)
-        
+
         # Write NDX
         with open(output, "w") as f:
             f.write("[ System ]\n")
@@ -546,10 +545,10 @@ continuation            = yes
             f.write(" ".join(map(str, protein_atoms)) + "\n")
             f.write("[ Non-Protein ]\n")
             f.write(" ".join(map(str, solvent_atoms)) + "\n")
-        
+
         self.log.info(f"Created index file: {output}")
         return output
-    
+
     def prealign_trajectory(
         self,
         tpr_file: str | Path,
@@ -558,9 +557,9 @@ continuation            = yes
     ) -> Path:
         """
         Pre-align trajectory for analysis (center and image).
-        
+
         Uses gmx trjconv to center on protein and apply PBC corrections.
-        
+
         Parameters
         ----------
         tpr_file : Path
@@ -569,7 +568,7 @@ continuation            = yes
             Input XTC trajectory
         output : Path, optional
             Output XTC (defaults to input with _aligned suffix)
-            
+
         Returns
         -------
         Path
@@ -578,17 +577,17 @@ continuation            = yes
         tpr_file = Path(tpr_file)
         xtc_file = Path(xtc_file)
         output = Path(output) if output else xtc_file.with_stem(xtc_file.stem + "_aligned")
-        
+
         tmp_file = xtc_file.with_stem(xtc_file.stem + "_tmp")
-        
+
         # Step 1: Remove jumps
         cmd1 = f"echo '1 0' | gmx trjconv -s {tpr_file} -f {xtc_file} -o {tmp_file} -pbc nojump -center"
-        
+
         # Step 2: Apply compact representation
         cmd2 = f"echo '1 0' | gmx trjconv -s {tpr_file} -f {tmp_file} -o {output} -pbc mol -ur compact -center"
-        
+
         self.log.info(f"Pre-aligning trajectory: {xtc_file.name}")
-        
+
         try:
             subprocess.run(cmd1, shell=True, check=True, capture_output=True)
             subprocess.run(cmd2, shell=True, check=True, capture_output=True)
@@ -598,7 +597,7 @@ continuation            = yes
         except subprocess.CalledProcessError as e:
             self.log.error(f"Trajectory alignment failed: {e}")
             raise
-    
+
     def write_replica_inputs(
         self,
         replica,
@@ -607,7 +606,7 @@ continuation            = yes
     ) -> list[Path]:
         """
         Write all GROMACS input files for a replica.
-        
+
         Parameters
         ----------
         replica : Replica
@@ -616,7 +615,7 @@ continuation            = yes
             Output directory (defaults to replica.path)
         convert_topology : bool
             Convert Amber topology to GROMACS format
-            
+
         Returns
         -------
         list[Path]
@@ -624,9 +623,9 @@ continuation            = yes
         """
         output_dir = Path(output_dir) if output_dir else replica.path
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         files = []
-        
+
         # Convert topology if needed
         if convert_topology and replica.topology.endswith(".prmtop"):
             top_path, gro_path = self.convert_amber_to_gromacs(
@@ -638,31 +637,33 @@ continuation            = yes
             files.extend([top_path, gro_path])
         else:
             gro_path = output_dir / "system.gro"
-        
+
         # Create index groups
         ndx_path = self.create_index_groups(gro_path, output_dir / "index.ndx")
         files.append(ndx_path)
-        
+
         # Create restraints
         posre_path = self.write_restraints_itp(gro_path, output_dir / "posre.itp")
         files.append(posre_path)
-        
+
         # Minimization (2 stages)
-        files.append(self.write_minimization(output_dir / "min1.mdp", steps=5000, algorithm="steep"))
+        files.append(
+            self.write_minimization(output_dir / "min1.mdp", steps=5000, algorithm="steep")
+        )
         files.append(self.write_minimization(output_dir / "min2.mdp", steps=5000, algorithm="cg"))
-        
+
         # NVT equilibration
         files.append(self.write_nvt_equilibration(output_dir / "nvt.mdp", steps=50000))
-        
+
         # NPT equilibration
         files.append(self.write_npt_equilibration(output_dir / "npt.mdp", steps=100000))
-        
+
         # Production
         files.append(self.write_production(output_dir / "prod.mdp", steps=500000, ensemble="NVT"))
-        
+
         # Write run script
         run_script = output_dir / "run_gromacs.sh"
-        run_script.write_text(f'''#!/bin/bash
+        run_script.write_text("""#!/bin/bash
 # GROMACS run script - Generated by pyMDMix
 
 GMX="gmx"
@@ -691,20 +692,21 @@ $GMX grompp -f prod.mdp -c npt.gro -p $TOP -n $NDX -o prod.tpr -maxwarn 2
 $GMX mdrun -deffnm prod -v
 
 echo "Done!"
-''')
+""")
         run_script.chmod(0o755)
         files.append(run_script)
-        
+
         return files
 
 
 @dataclass
 class GromacsCheckResult:
     """Result of GROMACS simulation check."""
+
     minimization: bool = False
     equilibration: bool = False
     production: bool = False
-    
+
     @property
     def complete(self) -> bool:
         return self.minimization and self.equilibration and self.production
@@ -713,53 +715,53 @@ class GromacsCheckResult:
 class GromacsCheck:
     """
     Check GROMACS simulation status.
-    
+
     Verifies that simulation stages completed successfully.
     """
-    
+
     def __init__(self):
         self.log = logging.getLogger(self.__class__.__name__)
-    
+
     def check_minimization(self, path: str | Path) -> bool:
         """Check if minimization completed."""
         path = Path(path)
         log_file = path / "min2.log"
-        
+
         if not log_file.exists():
             log_file = path / "min1.log"
-        
+
         if not log_file.exists():
             return False
-        
+
         content = log_file.read_text()
         return "Finished mdrun" in content or "Force converged" in content
-    
+
     def check_equilibration(self, path: str | Path) -> bool:
         """Check if equilibration completed."""
         path = Path(path)
-        
+
         for stage in ["nvt", "npt"]:
             log_file = path / f"{stage}.log"
             if not log_file.exists():
                 return False
-            
+
             content = log_file.read_text()
             if "Finished mdrun" not in content:
                 return False
-        
+
         return True
-    
+
     def check_production(self, path: str | Path) -> bool:
         """Check if production completed."""
         path = Path(path)
         log_file = path / "prod.log"
-        
+
         if not log_file.exists():
             return False
-        
+
         content = log_file.read_text()
         return "Finished mdrun" in content
-    
+
     def check_all(self, path: str | Path) -> GromacsCheckResult:
         """Check all simulation stages."""
         return GromacsCheckResult(
@@ -767,32 +769,34 @@ class GromacsCheck:
             equilibration=self.check_equilibration(path),
             production=self.check_production(path),
         )
-    
+
     def get_box_volume(self, log_file: str | Path) -> float | None:
         """
         Extract average box volume from production log.
-        
+
         Parameters
         ----------
         log_file : Path
             GROMACS log file
-            
+
         Returns
         -------
         float or None
             Box volume in Å³, or None if not found
         """
         log_file = Path(log_file)
-        
+
         if not log_file.exists():
             return None
-        
+
         content = log_file.read_text()
-        
+
         # Look for box dimensions in log
         # Box-X, Box-Y, Box-Z in nm
-        match = re.search(r"Box-X\s+Box-Y\s+Box-Z\s*\n\s*([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)", content)
-        
+        match = re.search(
+            r"Box-X\s+Box-Y\s+Box-Z\s*\n\s*([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)", content
+        )
+
         if match:
             box_x = float(match.group(1)) * 10  # nm to Å
             box_y = float(match.group(2)) * 10
@@ -800,5 +804,5 @@ class GromacsCheck:
             # Apply truncated octahedron correction if applicable
             volume = box_x * box_y * box_z * 0.77
             return volume
-        
+
         return None

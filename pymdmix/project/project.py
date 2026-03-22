@@ -27,12 +27,13 @@ Examples
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Iterator, Any
 import json
 import logging
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from pymdmix.project.config import Config
 from pymdmix.project.replica import Replica, ReplicaState, create_replica
@@ -60,6 +61,7 @@ class Project:
     created_at : str
         Creation timestamp
     """
+
     name: str
     path: Path
     config: Config = field(default_factory=Config)
@@ -238,7 +240,7 @@ class Project:
             "State Summary:",
         ]
 
-        for state, count in status['states'].items():
+        for state, count in status["states"].items():
             lines.append(f"  {state}: {count}")
 
         return "\n".join(lines)
@@ -282,7 +284,7 @@ class Project:
         # Ensure directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
         # Also save individual replica files

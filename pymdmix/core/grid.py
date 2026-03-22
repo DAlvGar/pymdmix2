@@ -72,7 +72,7 @@ class Grid:
         """Validate grid data."""
         if self.data.ndim != 3:
             raise ValueError(f"Grid data must be 3D, got {self.data.ndim}D")
-            
+
         # Normalize spacing to tuple
         if isinstance(self.spacing, (int, float)):
             if self.spacing <= 0:
@@ -106,18 +106,12 @@ class Grid:
     @property
     def center(self) -> tuple[float, float, float]:
         """Grid center coordinates."""
-        return tuple(
-            self.origin[i] + self.dimensions[i] / 2
-            for i in range(3)
-        )  # type: ignore
+        return tuple(self.origin[i] + self.dimensions[i] / 2 for i in range(3))  # type: ignore
 
     @property
     def extent(self) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
         """Grid extent as ((xmin, xmax), (ymin, ymax), (zmin, zmax))."""
-        return tuple(
-            (self.origin[i], self.origin[i] + self.dimensions[i])
-            for i in range(3)
-        )  # type: ignore
+        return tuple((self.origin[i], self.origin[i] + self.dimensions[i]) for i in range(3))  # type: ignore
 
     # =========================================================================
     # Value Access
@@ -126,12 +120,12 @@ class Grid:
     def get_value(self, x: float, y: float, z: float) -> float | None:
         """
         Get grid value at a specific coordinate.
-        
+
         Parameters
         ----------
         x, y, z : float
             Coordinates in Angstroms
-            
+
         Returns
         -------
         float or None
@@ -148,7 +142,7 @@ class Grid:
     def set_value(self, x: float, y: float, z: float, value: float) -> bool:
         """
         Set grid value at a specific coordinate.
-        
+
         Returns True if successful, False if outside grid.
         """
         try:
@@ -202,10 +196,7 @@ class Grid:
         min_c = np.asarray(min_coord)
         max_c = np.asarray(max_coord)
 
-        shape = tuple(
-            int(np.ceil((max_c[i] - min_c[i]) / spacing)) + 1
-            for i in range(3)
-        )
+        shape = tuple(int(np.ceil((max_c[i] - min_c[i]) / spacing)) + 1 for i in range(3))
 
         data = np.full(shape, fill_value, dtype=np.float64)
 
@@ -278,10 +269,7 @@ class Grid:
         """
         c = np.asarray(coord)
         sp = self.spacing_tuple
-        idx = tuple(
-            int((c[i] - self.origin[i]) / sp[i])
-            for i in range(3)
-        )
+        idx = tuple(int((c[i] - self.origin[i]) / sp[i]) for i in range(3))
         return idx  # type: ignore
 
     def index_to_coord(
@@ -302,10 +290,7 @@ class Grid:
             (x, y, z) coordinate at grid point
         """
         sp = self.spacing_tuple
-        return tuple(
-            self.origin[i] + index[i] * sp[i]
-            for i in range(3)
-        )  # type: ignore
+        return tuple(self.origin[i] + index[i] * sp[i] for i in range(3))  # type: ignore
 
     def get_cartesian(self, indices: NDArray[np.int64]) -> NDArray[np.float64]:
         """Convert multiple indices to cartesian coordinates."""
@@ -361,22 +346,17 @@ class Grid:
         """
         sp = np.array(self.spacing_tuple)
         origin = np.array(self.origin)
-        
+
         # Convert all coordinates to indices
         indices = ((coords - origin) / sp).astype(int)
 
         # Filter to valid indices
-        valid = np.all(
-            (indices >= 0) & (indices < np.array(self.shape)),
-            axis=1
-        )
+        valid = np.all((indices >= 0) & (indices < np.array(self.shape)), axis=1)
         valid_indices = indices[valid]
 
         # Add counts using numpy bincount for efficiency
         if len(valid_indices) > 0:
-            flat_indices = np.ravel_multi_index(
-                valid_indices.T, self.shape
-            )
+            flat_indices = np.ravel_multi_index(valid_indices.T, self.shape)
             counts = np.bincount(flat_indices, minlength=self.data.size)
             self.data += counts.reshape(self.shape)
 
@@ -440,7 +420,7 @@ class Grid:
         positive_data = self.data[self.data > 0]
         if len(positive_data) == 0:
             raise ValueError("No positive density values found")
-            
+
         if reference == "mean":
             rho0 = positive_data.mean()
         elif reference == "max":
@@ -452,9 +432,9 @@ class Grid:
             rho0 = float(reference)
 
         # Calculate free energy
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             dg = -RT * np.log(self.data / rho0)
-            
+
         # Mask invalid values
         dg = np.where(np.isfinite(dg), dg, mask_value)
 
@@ -474,9 +454,9 @@ class Grid:
     ) -> Grid:
         """
         Convert counts to free energy with volume correction.
-        
+
         ΔG = -RT ln(ρ/ρ_expected * correction)
-        
+
         Parameters
         ----------
         expected : float
@@ -487,7 +467,7 @@ class Grid:
             Volume correction factor
         mask_value : float
             Value for masked regions
-            
+
         Returns
         -------
         Grid
@@ -495,14 +475,14 @@ class Grid:
         """
         R = 0.001987204  # kcal/(mol·K)
         RT = R * temperature
-        
-        with np.errstate(divide='ignore', invalid='ignore'):
+
+        with np.errstate(divide="ignore", invalid="ignore"):
             ratio = (self.data / expected) * volume_correction
             dg = -RT * np.log(ratio)
-            
+
         dg = np.where(np.isfinite(dg), dg, mask_value)
         dg = np.where(self.data > 0, dg, mask_value)
-        
+
         return Grid(
             data=dg,
             origin=self.origin,
@@ -535,7 +515,7 @@ class Grid:
     ) -> Grid:
         """
         Mask grid values based on threshold.
-        
+
         Parameters
         ----------
         value : float
@@ -546,7 +526,7 @@ class Grid:
             If True, mask values above threshold; if False, mask below
         include : bool
             If True, include threshold value in mask
-            
+
         Returns
         -------
         Grid
@@ -562,10 +542,10 @@ class Grid:
                 mask = self.data <= value
             else:
                 mask = self.data < value
-                
+
         new_data = self.data.copy()
         new_data[mask] = mask_value
-        
+
         return Grid(
             data=new_data,
             origin=self.origin,
@@ -581,7 +561,7 @@ class Grid:
     ) -> Grid:
         """
         Set values within cutoff of a point to specified value.
-        
+
         Parameters
         ----------
         point : tuple
@@ -590,7 +570,7 @@ class Grid:
             Distance cutoff
         value : float
             Value to set
-            
+
         Returns
         -------
         Grid
@@ -598,10 +578,10 @@ class Grid:
         """
         indices = self.get_radial_indices(cutoff, point)
         new_data = self.data.copy()
-        
+
         for idx in indices:
             new_data[idx] = value
-            
+
         return Grid(
             data=new_data,
             origin=self.origin,
@@ -617,7 +597,7 @@ class Grid:
     ) -> Grid:
         """
         Mask grid points within cutoff of protein atoms.
-        
+
         Parameters
         ----------
         coords : NDArray
@@ -626,14 +606,14 @@ class Grid:
             Distance cutoff
         value : float
             Value to set for masked points
-            
+
         Returns
         -------
         Grid
             Masked grid
         """
         new_data = self.data.copy()
-        
+
         # For each grid point, check distance to nearest atom
         for ix in range(self.shape[0]):
             for iy in range(self.shape[1]):
@@ -642,7 +622,7 @@ class Grid:
                     distances = np.linalg.norm(coords - grid_coord, axis=1)
                     if distances.min() < cutoff:
                         new_data[ix, iy, iz] = value
-                        
+
         return Grid(
             data=new_data,
             origin=self.origin,
@@ -658,7 +638,7 @@ class Grid:
     ) -> Grid:
         """
         Mask grid points OUTSIDE cutoff of protein atoms.
-        
+
         Parameters
         ----------
         coords : NDArray
@@ -667,14 +647,14 @@ class Grid:
             Distance cutoff
         value : float
             Value to set for masked points
-            
+
         Returns
         -------
         Grid
             Masked grid
         """
         new_data = self.data.copy()
-        
+
         for ix in range(self.shape[0]):
             for iy in range(self.shape[1]):
                 for iz in range(self.shape[2]):
@@ -682,7 +662,7 @@ class Grid:
                     distances = np.linalg.norm(coords - grid_coord, axis=1)
                     if distances.min() >= cutoff:
                         new_data[ix, iy, iz] = value
-                        
+
         return Grid(
             data=new_data,
             origin=self.origin,
@@ -702,7 +682,7 @@ class Grid:
     ) -> list[tuple[int, int, int]]:
         """
         Get grid indices within radius of center point.
-        
+
         Parameters
         ----------
         radius : float
@@ -711,7 +691,7 @@ class Grid:
             Center point. If None, uses grid center.
         min_radius : float
             Minimum radius (for shell selection)
-            
+
         Returns
         -------
         list[tuple]
@@ -719,26 +699,32 @@ class Grid:
         """
         if center is None:
             center = self.center
-            
+
         center_arr = np.array(center)
         indices = []
-        
+
         # Calculate grid points to check
         sp = self.spacing_tuple
         max_grid_dist = int(np.ceil(radius / min(sp))) + 1
         center_idx = self.coord_to_index(center)
-        
-        for ix in range(max(0, center_idx[0] - max_grid_dist),
-                       min(self.shape[0], center_idx[0] + max_grid_dist + 1)):
-            for iy in range(max(0, center_idx[1] - max_grid_dist),
-                           min(self.shape[1], center_idx[1] + max_grid_dist + 1)):
-                for iz in range(max(0, center_idx[2] - max_grid_dist),
-                               min(self.shape[2], center_idx[2] + max_grid_dist + 1)):
+
+        for ix in range(
+            max(0, center_idx[0] - max_grid_dist),
+            min(self.shape[0], center_idx[0] + max_grid_dist + 1),
+        ):
+            for iy in range(
+                max(0, center_idx[1] - max_grid_dist),
+                min(self.shape[1], center_idx[1] + max_grid_dist + 1),
+            ):
+                for iz in range(
+                    max(0, center_idx[2] - max_grid_dist),
+                    min(self.shape[2], center_idx[2] + max_grid_dist + 1),
+                ):
                     coord = np.array(self.index_to_coord((ix, iy, iz)))
                     dist = np.linalg.norm(coord - center_arr)
                     if min_radius <= dist <= radius:
                         indices.append((ix, iy, iz))
-                        
+
         return indices
 
     def get_sphere_values(
@@ -748,14 +734,14 @@ class Grid:
     ) -> NDArray[np.float64]:
         """
         Get all grid values within sphere.
-        
+
         Parameters
         ----------
         center : tuple
             Sphere center
         radius : float
             Sphere radius
-            
+
         Returns
         -------
         NDArray
@@ -772,7 +758,7 @@ class Grid:
     ) -> None:
         """
         Set all grid values within sphere.
-        
+
         Parameters
         ----------
         center : tuple
@@ -815,14 +801,14 @@ class Grid:
     def expand(self, buffer: int, fill_value: float = 0.0) -> Grid:
         """
         Expand grid by adding buffer points on all sides.
-        
+
         Parameters
         ----------
         buffer : int
             Number of grid points to add
         fill_value : float
             Value for new points
-            
+
         Returns
         -------
         Grid
@@ -830,21 +816,18 @@ class Grid:
         """
         new_shape = tuple(s + 2 * buffer for s in self.shape)
         new_data = np.full(new_shape, fill_value, dtype=np.float64)
-        
+
         # Copy original data to center
         new_data[
-            buffer:buffer + self.shape[0],
-            buffer:buffer + self.shape[1],
-            buffer:buffer + self.shape[2],
+            buffer : buffer + self.shape[0],
+            buffer : buffer + self.shape[1],
+            buffer : buffer + self.shape[2],
         ] = self.data
-        
+
         # Calculate new origin
         sp = self.spacing_tuple
-        new_origin = tuple(
-            self.origin[i] - buffer * sp[i]
-            for i in range(3)
-        )
-        
+        new_origin = tuple(self.origin[i] - buffer * sp[i] for i in range(3))
+
         return Grid(
             data=new_data,
             origin=new_origin,
@@ -855,12 +838,12 @@ class Grid:
     def contract(self, buffer: int) -> Grid:
         """
         Contract grid by removing buffer points from all sides.
-        
+
         Parameters
         ----------
         buffer : int
             Number of grid points to remove
-            
+
         Returns
         -------
         Grid
@@ -868,19 +851,16 @@ class Grid:
         """
         if any(s <= 2 * buffer for s in self.shape):
             raise ValueError(f"Cannot contract by {buffer}: grid too small")
-            
+
         new_data = self.data[
             buffer:-buffer,
             buffer:-buffer,
             buffer:-buffer,
         ].copy()
-        
+
         sp = self.spacing_tuple
-        new_origin = tuple(
-            self.origin[i] + buffer * sp[i]
-            for i in range(3)
-        )
-        
+        new_origin = tuple(self.origin[i] + buffer * sp[i] for i in range(3))
+
         return Grid(
             data=new_data,
             origin=new_origin,
@@ -891,12 +871,12 @@ class Grid:
     def trim(self, threshold: float = 0.0) -> Grid:
         """
         Trim grid to smallest box containing non-zero values.
-        
+
         Parameters
         ----------
         threshold : float
             Values above this are considered non-zero
-            
+
         Returns
         -------
         Grid
@@ -904,26 +884,23 @@ class Grid:
         """
         # Find non-zero regions
         nonzero = np.where(self.data > threshold)
-        
+
         if len(nonzero[0]) == 0:
             return self.copy()
-            
+
         # Get bounding box
         min_idx = [arr.min() for arr in nonzero]
         max_idx = [arr.max() for arr in nonzero]
-        
+
         new_data = self.data[
-            min_idx[0]:max_idx[0] + 1,
-            min_idx[1]:max_idx[1] + 1,
-            min_idx[2]:max_idx[2] + 1,
+            min_idx[0] : max_idx[0] + 1,
+            min_idx[1] : max_idx[1] + 1,
+            min_idx[2] : max_idx[2] + 1,
         ].copy()
-        
+
         sp = self.spacing_tuple
-        new_origin = tuple(
-            self.origin[i] + min_idx[i] * sp[i]
-            for i in range(3)
-        )
-        
+        new_origin = tuple(self.origin[i] + min_idx[i] * sp[i] for i in range(3))
+
         return Grid(
             data=new_data,
             origin=new_origin,
@@ -938,14 +915,14 @@ class Grid:
     ) -> Grid:
         """
         Extract subgrid within coordinate bounds.
-        
+
         Parameters
         ----------
         min_coord : tuple
             Minimum corner (x, y, z)
         max_coord : tuple
             Maximum corner (x, y, z)
-            
+
         Returns
         -------
         Grid
@@ -953,19 +930,19 @@ class Grid:
         """
         min_idx = self.coord_to_index(min_coord)
         max_idx = self.coord_to_index(max_coord)
-        
+
         # Clamp to valid range
         min_idx = tuple(max(0, min(idx, s - 1)) for idx, s in zip(min_idx, self.shape))
         max_idx = tuple(max(0, min(idx, s - 1)) for idx, s in zip(max_idx, self.shape))
-        
+
         new_data = self.data[
-            min_idx[0]:max_idx[0] + 1,
-            min_idx[1]:max_idx[1] + 1,
-            min_idx[2]:max_idx[2] + 1,
+            min_idx[0] : max_idx[0] + 1,
+            min_idx[1] : max_idx[1] + 1,
+            min_idx[2] : max_idx[2] + 1,
         ].copy()
-        
+
         new_origin = self.index_to_coord(min_idx)
-        
+
         return Grid(
             data=new_data,
             origin=new_origin,
@@ -980,14 +957,14 @@ class Grid:
     ) -> Grid:
         """
         Extract cubic subgrid around a point.
-        
+
         Parameters
         ----------
         center : tuple
             Center point (x, y, z)
         distance : float
             Half-width of cube
-            
+
         Returns
         -------
         Grid
@@ -1026,14 +1003,14 @@ class Grid:
     ) -> float:
         """
         Get value at given percentile.
-        
+
         Parameters
         ----------
         percentile : float
             Percentile (0-100)
         mask_value : float | None
             If set, exclude this value from calculation
-            
+
         Returns
         -------
         float
@@ -1065,7 +1042,7 @@ class Grid:
         sp = self.spacing_tuple
 
         lines = []
-        
+
         # Header
         if self.metadata:
             for key, val in self.metadata.items():
@@ -1105,7 +1082,7 @@ class Grid:
         content = "\n".join(lines) + "\n"
 
         if gzip_compress:
-            with gzip.open(path, 'wt') as f:
+            with gzip.open(path, "wt") as f:
                 f.write(content)
         else:
             path.write_text(content)
@@ -1134,43 +1111,47 @@ class Grid:
         reading_data = False
         metadata = {}
 
-        opener = gzip.open if str(path).endswith('.gz') else open
+        opener = gzip.open if str(path).endswith(".gz") else open
 
-        with opener(path, 'rt') as f:
+        with opener(path, "rt") as f:
             for line in f:
                 line = line.strip()
 
-                if line.startswith('#'):
+                if line.startswith("#"):
                     # Parse metadata from comments
-                    if ':' in line:
-                        key, val = line[1:].split(':', 1)
+                    if ":" in line:
+                        key, val = line[1:].split(":", 1)
                         metadata[key.strip()] = val.strip()
                     continue
 
                 if not line:
                     continue
 
-                if 'gridpositions counts' in line:
+                if "gridpositions counts" in line:
                     parts = line.split()
                     shape = (int(parts[-3]), int(parts[-2]), int(parts[-1]))
 
-                elif line.startswith('origin'):
+                elif line.startswith("origin"):
                     parts = line.split()
                     origin = (float(parts[1]), float(parts[2]), float(parts[3]))
 
-                elif line.startswith('delta'):
+                elif line.startswith("delta"):
                     parts = line.split()
                     deltas = [float(parts[1]), float(parts[2]), float(parts[3])]
                     for i, d in enumerate(deltas):
                         if d > 0:
                             spacing[i] = d
 
-                elif 'data follows' in line:
+                elif "data follows" in line:
                     reading_data = True
                     continue
 
                 elif reading_data:
-                    if line.startswith('attribute') or line.startswith('object') or line.startswith('component'):
+                    if (
+                        line.startswith("attribute")
+                        or line.startswith("object")
+                        or line.startswith("component")
+                    ):
                         break
                     data_lines.append(line)
 
@@ -1184,17 +1165,15 @@ class Grid:
         sp = sp_values[0]  # Assume uniform if only one found
 
         # Parse data
-        data_str = ' '.join(data_lines)
-        data_flat = np.fromstring(data_str, sep=' ')
+        data_str = " ".join(data_lines)
+        data_flat = np.fromstring(data_str, sep=" ")
 
         expected_size = shape[0] * shape[1] * shape[2]
         if len(data_flat) != expected_size:
-            raise ValueError(
-                f"Data size mismatch: expected {expected_size}, got {len(data_flat)}"
-            )
+            raise ValueError(f"Data size mismatch: expected {expected_size}, got {len(data_flat)}")
 
         # Reshape (data is in C order after reading)
-        data = data_flat.reshape(shape, order='C')
+        data = data_flat.reshape(shape, order="C")
 
         return cls(data=data, origin=origin, spacing=sp, metadata=metadata)
 
@@ -1210,7 +1189,7 @@ class Grid:
     ) -> None:
         """
         Write grid in XPLOR/CNS format.
-        
+
         Parameters
         ----------
         path : str or Path
@@ -1225,23 +1204,25 @@ class Grid:
         sp = self.spacing_tuple
 
         lines = []
-        
+
         # Header
         lines.append("")
-        lines.append(f"       2 !NTITLE")
+        lines.append("       2 !NTITLE")
         lines.append(f" REMARKS {header if header else 'XPLOR grid from pyMDMix'}")
-        lines.append(f" REMARKS")
-        
+        lines.append(" REMARKS")
+
         # Grid info
-        lines.append(f"{nx:8d}{0:8d}{nx-1:8d}{ny:8d}{0:8d}{ny-1:8d}{nz:8d}{0:8d}{nz-1:8d}")
-        
+        lines.append(f"{nx:8d}{0:8d}{nx - 1:8d}{ny:8d}{0:8d}{ny - 1:8d}{nz:8d}{0:8d}{nz - 1:8d}")
+
         # Cell dimensions (orthogonal)
         cell_a = nx * sp[0]
         cell_b = ny * sp[1]
         cell_c = nz * sp[2]
-        lines.append(f"{cell_a:12.5E}{cell_b:12.5E}{cell_c:12.5E}{90.0:12.5E}{90.0:12.5E}{90.0:12.5E}")
+        lines.append(
+            f"{cell_a:12.5E}{cell_b:12.5E}{cell_c:12.5E}{90.0:12.5E}{90.0:12.5E}{90.0:12.5E}"
+        )
         lines.append("ZYX")
-        
+
         # Data
         for iz in range(nz):
             lines.append(f"{iz:8d}")
@@ -1256,18 +1237,18 @@ class Grid:
                         row = []
             if row:
                 lines.append("".join(row))
-                
+
         lines.append(f"{-9999:8d}")
-        
+
         # Statistics
         avg = self.data.mean()
         std = self.data.std()
         lines.append(f"{avg:12.4E}{std:12.4E}")
-        
+
         content = "\n".join(lines) + "\n"
-        
+
         if gzip_compress:
-            with gzip.open(path, 'wt') as f:
+            with gzip.open(path, "wt") as f:
                 f.write(content)
         else:
             path.write_text(content)
@@ -1276,34 +1257,34 @@ class Grid:
     def read_xplor(cls, path: str | Path) -> Grid:
         """
         Read grid from XPLOR/CNS format.
-        
+
         Parameters
         ----------
         path : str or Path
             Input file path
-            
+
         Returns
         -------
         Grid
             Loaded grid
         """
         path = Path(path)
-        
-        opener = gzip.open if str(path).endswith('.gz') else open
-        
-        with opener(path, 'rt') as f:
+
+        opener = gzip.open if str(path).endswith(".gz") else open
+
+        with opener(path, "rt") as f:
             lines = f.readlines()
-            
+
         # Parse header
         idx = 0
-        while idx < len(lines) and 'NTITLE' not in lines[idx]:
+        while idx < len(lines) and "NTITLE" not in lines[idx]:
             idx += 1
         idx += 1
-        
+
         # Skip title lines
-        while idx < len(lines) and 'REMARKS' in lines[idx]:
+        while idx < len(lines) and "REMARKS" in lines[idx]:
             idx += 1
-            
+
         # Parse grid dimensions
         dim_line = lines[idx].strip()
         parts = dim_line.split()
@@ -1311,7 +1292,7 @@ class Grid:
         ny = int(parts[3])
         nz = int(parts[6])
         idx += 1
-        
+
         # Parse cell dimensions
         cell_line = lines[idx].strip()
         cell_parts = cell_line.split()
@@ -1319,13 +1300,13 @@ class Grid:
         cell_b = float(cell_parts[1])
         cell_c = float(cell_parts[2])
         idx += 1
-        
+
         # Skip ZYX line
         idx += 1
-        
+
         # Parse data
         data = np.zeros((nx, ny, nz), dtype=np.float64)
-        
+
         iz = 0
         while iz < nz:
             # Read section header
@@ -1333,7 +1314,7 @@ class Grid:
             if section == -9999:
                 break
             idx += 1
-            
+
             # Read section data
             values = []
             while len(values) < nx * ny:
@@ -1341,23 +1322,23 @@ class Grid:
                 # Parse 6 values per line
                 for i in range(0, len(line), 12):
                     try:
-                        values.append(float(line[i:i+12]))
+                        values.append(float(line[i : i + 12]))
                     except ValueError:
                         pass
                 idx += 1
-                
+
             # Fill data array
             vi = 0
             for iy in range(ny):
                 for ix in range(nx):
                     data[ix, iy, iz] = values[vi]
                     vi += 1
-                    
+
             iz += 1
-            
+
         # Calculate spacing
         spacing = (cell_a / nx, cell_b / ny, cell_c / nz)
-        
+
         return cls(
             data=data,
             origin=(0.0, 0.0, 0.0),  # XPLOR typically uses 0 origin
@@ -1435,6 +1416,7 @@ class Grid:
 # Utility Functions
 # =============================================================================
 
+
 def average_grids(
     grids: list[Grid],
     boltzmann: bool = False,
@@ -1442,7 +1424,7 @@ def average_grids(
 ) -> Grid:
     """
     Average multiple grids.
-    
+
     Parameters
     ----------
     grids : list[Grid]
@@ -1451,7 +1433,7 @@ def average_grids(
         Use Boltzmann-weighted averaging
     temperature : float
         Temperature for Boltzmann weighting
-        
+
     Returns
     -------
     Grid
@@ -1459,27 +1441,27 @@ def average_grids(
     """
     if not grids:
         raise ValueError("No grids to average")
-        
+
     ref = grids[0]
     for g in grids[1:]:
         if g.shape != ref.shape:
             raise ValueError("All grids must have same shape")
-            
+
     if boltzmann:
         R = 0.001987204  # kcal/(mol·K)
         RT = R * temperature
-        
+
         # Boltzmann weights
         weights = []
         for g in grids:
             w = np.exp(-g.data / RT)
             weights.append(w)
-            
+
         total_weight = sum(weights)
         data = sum(g.data * w for g, w in zip(grids, weights)) / total_weight
     else:
         data = np.mean([g.data for g in grids], axis=0)
-        
+
     return Grid(
         data=data,
         origin=ref.origin,

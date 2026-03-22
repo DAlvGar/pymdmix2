@@ -1,6 +1,6 @@
 # pyMDMix Rewrite Plan
 
-**Decision:** Full rewrite rather than migration.  
+**Decision:** Full rewrite rather than migration.
 **Reason:** Biskit integration is too deep (private method access, 15+ PDBModel methods, subclassing). A compatibility layer would essentially reimplement Biskit.
 
 ---
@@ -91,20 +91,20 @@ class Grid:
     data: NDArray[np.float64]
     origin: tuple[float, float, float]
     spacing: float
-    
+
     @classmethod
     def from_structure(cls, coords: NDArray, spacing: float = 0.5, padding: float = 5.0) -> Grid:
         """Create grid encompassing structure with padding."""
         ...
-    
+
     def add_count(self, coord: NDArray) -> None:
         """Add count at coordinate position."""
         ...
-    
+
     def to_density(self, n_frames: int) -> Grid:
         """Convert counts to density."""
         ...
-    
+
     def write_dx(self, path: Path) -> None:
         """Write in OpenDX format."""
         ...
@@ -115,7 +115,7 @@ class Grid:
 ```python
 class TrajectoryReader(Protocol):
     """Protocol for trajectory readers."""
-    
+
     @property
     def n_frames(self) -> int: ...
     def __iter__(self) -> Iterator[Frame]: ...
@@ -139,7 +139,7 @@ def open_trajectory(topology: Path, trajectory: Path, backend: str = 'auto') -> 
 class Action(ABC):
     """Abstract base for analysis actions."""
     name: str
-    
+
     @abstractmethod
     def run(self, replica: Replica, trajectory: TrajectoryReader, **kwargs) -> ActionResult:
         ...

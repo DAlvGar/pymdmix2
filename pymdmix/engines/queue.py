@@ -30,9 +30,9 @@ Examples
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
 import logging
+from dataclasses import dataclass, field, fields
+from pathlib import Path
 from string import Template
 
 log = logging.getLogger(__name__)
@@ -64,6 +64,7 @@ class QueueConfig:
     email : str
         Email for notifications
     """
+
     system: str = "slurm"
     partition: str = "gpu"
     n_nodes: int = 1
@@ -76,6 +77,50 @@ class QueueConfig:
     extra_directives: list[str] = field(default_factory=list)
     modules: list[str] = field(default_factory=list)
     environment: dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_file(cls, path: Path | str) -> QueueConfig:
+        """
+        Load QueueConfig from a TOML or JSON file.
+
+        Parameters
+        ----------
+        path : Path | str
+            Config file path (.toml or .json)
+
+        Returns
+        -------
+        QueueConfig
+            Loaded configuration
+
+        Examples
+        --------
+        >>> cfg = QueueConfig.from_file("queue.toml")
+        """
+        import json
+
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Queue config file not found: {path}")
+
+        if path.suffix == ".toml":
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib  # type: ignore[no-redef]
+            with open(path, "rb") as f:
+                data = tomllib.load(f)
+        elif path.suffix == ".json":
+            with open(path) as f:
+                data = json.load(f)
+        else:
+            raise ValueError(
+                f"Unsupported queue config format: {path.suffix!r}. Use .toml or .json"
+            )
+
+        valid = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in valid}
+        return cls(**filtered)
 
 
 # SLURM template
@@ -312,7 +357,7 @@ def generate_mdmix_production_script(
         f"COORDS={coordinates}",
         "",
         f"for i in $(seq 1 {n_runs}); do",
-        "    echo \"Starting run $i\"",
+        '    echo "Starting run $i"',
         "    if [ $i -eq 1 ]; then",
         "        INPUT=$COORDS",
         "    else",
@@ -328,7 +373,7 @@ def generate_mdmix_production_script(
         "        -x md${i}.nc \\",
         "        -ref $INPUT \\",
         "        -inf md${i}.mdinfo",
-        "    echo \"Finished run $i\"",
+        '    echo "Finished run $i"',
         "done",
     ]
 

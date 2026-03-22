@@ -42,6 +42,7 @@ class Probe:
     probability : float | None
         Expected probability per probe atom (derived from volume)
     """
+
     name: str
     residue: str
     atoms: list[str]
@@ -73,6 +74,7 @@ class SolventResidue:
     description : str
         Human-readable description
     """
+
     name: str
     count: int = 0
     description: str = ""
@@ -124,6 +126,7 @@ class Solvent:
     ...     is_ionic=False,
     ... )
     """
+
     name: str
     description: str = ""
     full_name: str = ""
@@ -160,27 +163,23 @@ class Solvent:
     def get_types_map(self) -> dict[str, str]:
         """
         Get mapping of probe names to chemical types.
-        
+
         Returns a dict like {'OH': 'Don,Acc', 'CT': 'Hyd', 'WAT': 'Wat'}
         """
-        return {
-            p.name: ','.join(p.probe_types)
-            for p in self.probes
-            if p.probe_types
-        }
+        return {p.name: ",".join(p.probe_types) for p in self.probes if p.probe_types}
 
     def calculate_probability(self, probe_name: str) -> float | None:
         """
         Calculate expected probability for a probe.
-        
+
         Probability = 1 / volume (per probe atom in standard units).
         This is used for Boltzmann energy calculations.
-        
+
         Parameters
         ----------
         probe_name : str
             Name of the probe
-            
+
         Returns
         -------
         float | None
@@ -188,15 +187,15 @@ class Solvent:
         """
         if self.volume is None or self.volume <= 0:
             return None
-        
+
         probe = self.get_probe(probe_name)
         if probe is None:
             return None
-        
+
         # Return stored probability if available
         if probe.probability is not None:
             return probe.probability
-        
+
         # Calculate from volume (simplified - actual calculation may vary)
         return 1.0 / self.volume
 
@@ -204,43 +203,42 @@ class Solvent:
     def from_dict(cls, data: dict) -> Solvent:
         """Create Solvent from dictionary."""
         residues = [
-            SolventResidue(**r) if isinstance(r, dict) else r
-            for r in data.get('residues', [])
+            SolventResidue(**r) if isinstance(r, dict) else r for r in data.get("residues", [])
         ]
-        
+
         # Handle probes with new fields
         probes = []
-        for p in data.get('probes', []):
+        for p in data.get("probes", []):
             if isinstance(p, dict):
                 probe = Probe(
-                    name=p['name'],
-                    residue=p['residue'],
-                    atoms=p['atoms'],
-                    description=p.get('description', ''),
-                    probe_types=p.get('probe_types', []),
-                    probability=p.get('probability'),
+                    name=p["name"],
+                    residue=p["residue"],
+                    atoms=p["atoms"],
+                    description=p.get("description", ""),
+                    probe_types=p.get("probe_types", []),
+                    probability=p.get("probability"),
                 )
                 probes.append(probe)
             else:
                 probes.append(p)
 
-        off_file = data.get('off_file')
+        off_file = data.get("off_file")
         if off_file:
             off_file = Path(off_file)
 
         return cls(
-            name=data['name'],
-            description=data.get('description', ''),
-            full_name=data.get('full_name', data['name']),
+            name=data["name"],
+            description=data.get("description", ""),
+            full_name=data.get("full_name", data["name"]),
             residues=residues,
             probes=probes,
             off_file=off_file,
-            box_unit=data.get('box_unit', ''),
-            water_model=data.get('water_model', 'TIP3P'),
-            volume=data.get('volume'),
-            is_ionic=data.get('is_ionic', False),
-            total_charge=data.get('total_charge', 0.0),
-            corrections=data.get('corrections', {}),
+            box_unit=data.get("box_unit", ""),
+            water_model=data.get("water_model", "TIP3P"),
+            volume=data.get("volume"),
+            is_ionic=data.get("is_ionic", False),
+            total_charge=data.get("total_charge", 0.0),
+            corrections=data.get("corrections", {}),
         )
 
     @classmethod
@@ -260,28 +258,28 @@ class Solvent:
     def to_dict(self) -> dict:
         """Convert to dictionary."""
         result = {
-            'name': self.name,
-            'full_name': self.full_name,
-            'description': self.description,
-            'off_file': str(self.off_file) if self.off_file else None,
-            'box_unit': self.box_unit,
-            'water_model': self.water_model,
-            'volume': self.volume,
-            'is_ionic': self.is_ionic,
-            'total_charge': self.total_charge,
-            'corrections': self.corrections,
-            'residues': [
-                {'name': r.name, 'count': r.count, 'description': r.description}
+            "name": self.name,
+            "full_name": self.full_name,
+            "description": self.description,
+            "off_file": str(self.off_file) if self.off_file else None,
+            "box_unit": self.box_unit,
+            "water_model": self.water_model,
+            "volume": self.volume,
+            "is_ionic": self.is_ionic,
+            "total_charge": self.total_charge,
+            "corrections": self.corrections,
+            "residues": [
+                {"name": r.name, "count": r.count, "description": r.description}
                 for r in self.residues
             ],
-            'probes': [
+            "probes": [
                 {
-                    'name': p.name,
-                    'residue': p.residue,
-                    'atoms': p.atoms,
-                    'description': p.description,
-                    'probe_types': p.probe_types,
-                    'probability': p.probability,
+                    "name": p.name,
+                    "residue": p.residue,
+                    "atoms": p.atoms,
+                    "description": p.description,
+                    "probe_types": p.probe_types,
+                    "probability": p.probability,
                 }
                 for p in self.probes
             ],
@@ -290,14 +288,126 @@ class Solvent:
 
     def to_json(self, path: str | Path) -> None:
         """Save solvent to JSON file."""
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
-    def __repr__(self) -> str:
-        return (
-            f"Solvent({self.name!r}, "
-            f"residues={len(self.residues)}, probes={len(self.probes)})"
+    @classmethod
+    def from_file(cls, path: str | Path) -> Solvent:
+        """
+        Load a Solvent from a file, dispatching by extension.
+
+        Supports:
+        - ``.json`` — native JSON format (``from_json``)
+        - ``.cfg`` / ``.ini`` — legacy pyMDMix INI format
+
+        Parameters
+        ----------
+        path : str or Path
+            Path to solvent definition file
+
+        Returns
+        -------
+        Solvent
+            Loaded solvent definition
+
+        Examples
+        --------
+        >>> solvent = Solvent.from_file("my_solvent.json")
+        >>> solvent = Solvent.from_file("my_solvent.cfg")
+        """
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Solvent file not found: {path}")
+
+        if path.suffix == ".json":
+            return cls.from_json(path)
+        elif path.suffix in (".cfg", ".ini"):
+            return cls._from_cfg(path)
+        else:
+            # Attempt JSON by default
+            return cls.from_json(path)
+
+    @classmethod
+    def _from_cfg(cls, path: Path) -> Solvent:
+        """
+        Load Solvent from legacy pyMDMix ``.cfg`` INI format.
+
+        Expected sections: ``[SOLVENT]``, ``[PROBES]``, ``[RESIDUES]``
+        """
+        import configparser
+
+        parser = configparser.ConfigParser()
+        parser.read(str(path))
+
+        # --- [SOLVENT] section ---
+        solv_sec = dict(parser["SOLVENT"]) if parser.has_section("SOLVENT") else {}
+        name = solv_sec.get("name", path.stem.upper())
+        description = solv_sec.get("description", "")
+        full_name = solv_sec.get("full_name", name)
+        off_file_str = solv_sec.get("off_file")
+        box_unit = solv_sec.get("box_unit", "")
+        volume = float(solv_sec["volume"]) if "volume" in solv_sec else None
+        is_ionic = solv_sec.get("is_ionic", "false").lower() in ("true", "1", "yes")
+        water_model = solv_sec.get("water_model", "TIP3P")
+
+        # --- [RESIDUES] section ---
+        residues: list[SolventResidue] = []
+        if parser.has_section("RESIDUES"):
+            for res_name, count_str in parser.items("RESIDUES"):
+                if res_name.lower() == "default":
+                    continue
+                try:
+                    residues.append(SolventResidue(name=res_name.upper(), count=int(count_str)))
+                except ValueError:
+                    pass
+
+        # --- [PROBES] / per-probe sections ---
+        probes: list[Probe] = []
+        probe_names = [k for k in solv_sec if k.startswith("probe")] + (
+            [p.strip() for p in solv_sec.get("probes", "").split(",") if p.strip()]
         )
+        # Deduplicate preserving order
+        seen: set[str] = set()
+        unique_probes = [p for p in probe_names if not (p in seen or seen.add(p))]  # type: ignore[func-returns-value]
+
+        for probe_name in unique_probes:
+            sec = probe_name.upper()
+            if parser.has_section(sec):
+                pd = dict(parser[sec])
+                atoms_raw = pd.get("atoms", pd.get("atom", ""))
+                atoms = [a.strip() for a in atoms_raw.split(",") if a.strip()]
+                types_raw = pd.get("types", pd.get("type", ""))
+                probe_types = [t.strip() for t in types_raw.split(",") if t.strip()]
+                probes.append(
+                    Probe(
+                        name=sec,
+                        residue=pd.get("residue", ""),
+                        atoms=atoms,
+                        description=pd.get("description", ""),
+                        probe_types=probe_types,
+                        probability=float(pd["probability"]) if "probability" in pd else None,
+                    )
+                )
+
+        off_file = Path(off_file_str) if off_file_str else None
+        if off_file and not off_file.is_absolute():
+            off_file = path.parent / off_file
+
+        return cls(
+            name=name,
+            description=description,
+            full_name=full_name,
+            residues=residues,
+            probes=probes,
+            off_file=off_file,
+            box_unit=box_unit,
+            water_model=water_model,
+            volume=volume,
+            is_ionic=is_ionic,
+        )
+
+    def __repr__(self) -> str:
+        return f"Solvent({self.name!r}, residues={len(self.residues)}, probes={len(self.probes)})"
 
 
 class SolventLibrary:
@@ -327,7 +437,7 @@ class SolventLibrary:
 
     def _default_path(self) -> Path:
         """Get default library path (package data)."""
-        return Path(__file__).parent.parent / 'data' / 'solvents'
+        return Path(__file__).parent.parent / "data" / "solvents"
 
     def _load_library(self) -> None:
         """Load all solvents from library directory."""
@@ -335,7 +445,7 @@ class SolventLibrary:
             log.warning(f"Solvent library path does not exist: {self.library_path}")
             return
 
-        for json_file in self.library_path.glob('*.json'):
+        for json_file in self.library_path.glob("*.json"):
             try:
                 solvent = Solvent.from_json(json_file)
                 self._solvents[solvent.name] = solvent

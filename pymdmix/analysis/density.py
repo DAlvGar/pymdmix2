@@ -63,6 +63,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class ProbeConfig:
     """Configuration for a probe to track."""
+
     name: str
     selection: str | None = None  # MDAnalysis selection string
     atom_indices: NDArray[np.int64] | None = None  # Direct indices
@@ -74,9 +75,10 @@ class ProbeConfig:
             raise ValueError("Either selection, atom_indices, or is_com must be provided")
 
 
-@dataclass 
+@dataclass
 class Subregion:
     """Defines a subregion for focused density calculation."""
+
     min_coord: tuple[float, float, float]
     max_coord: tuple[float, float, float]
 
@@ -99,7 +101,7 @@ class Subregion:
 class DensityWorker(Process):
     """
     Multiprocessing worker for parallel density calculation.
-    
+
     Reads frames from a queue and updates shared memory-mapped count grids.
     """
 
@@ -169,7 +171,7 @@ class DensityWorker(Process):
 class ProteinDensityWorker(Process):
     """
     Worker for protein/solute density calculation with locking.
-    
+
     Uses a lock because all workers write to the same grid.
     """
 
@@ -228,7 +230,7 @@ class ProteinDensityWorker(Process):
 class AllHADensityWorker(Process):
     """
     Worker for all heavy atoms density calculation.
-    
+
     Tracks each heavy atom type and COM for each residue type.
     """
 
@@ -294,7 +296,10 @@ class AllHADensityWorker(Process):
                     if all_indices:
                         all_coords = frame_coords[all_indices]
                         com = all_coords.mean(axis=0)
-                        if self.subregion is None or len(self.subregion.filter_coords(com.reshape(1, 3))) > 0:
+                        if (
+                            self.subregion is None
+                            or len(self.subregion.filter_coords(com.reshape(1, 3))) > 0
+                        ):
                             idx = self._coord_to_index(com)
                             if idx is not None:
                                 self.count_grids[com_probe][idx] += 1
@@ -302,8 +307,8 @@ class AllHADensityWorker(Process):
 
 def _create_memmap_grid(shape: tuple[int, int, int]) -> np.memmap:
     """Create a temporary memory-mapped array for grid counts."""
-    tmp = tempfile.mktemp(prefix='pymdmix_mmap_')
-    return np.memmap(tmp, mode='w+', dtype='uint32', shape=shape)
+    tmp = tempfile.mktemp(prefix="pymdmix_mmap_")
+    return np.memmap(tmp, mode="w+", dtype="uint32", shape=shape)
 
 
 def _calculate_grid_params(
@@ -314,7 +319,7 @@ def _calculate_grid_params(
 ) -> tuple[NDArray, tuple[int, int, int]]:
     """
     Calculate grid origin and shape from reference coordinates.
-    
+
     Returns
     -------
     origin : NDArray
@@ -423,8 +428,11 @@ class DensityAction(Action):
 
         # Build probe configurations
         probes = self._build_probe_configs(
-            trajectory, probe_selections, probe_indices,
-            include_com=include_com, only_com=only_com,
+            trajectory,
+            probe_selections,
+            probe_indices,
+            include_com=include_com,
+            only_com=only_com,
             com_residue_indices=com_residue_indices,
         )
 
@@ -453,9 +461,7 @@ class DensityAction(Action):
                 break
 
         # Calculate grid parameters
-        grid_origin, grid_shape = _calculate_grid_params(
-            ref_coords, spacing, padding, sub
-        )
+        grid_origin, grid_shape = _calculate_grid_params(ref_coords, spacing, padding, sub)
         self.log.debug(f"Grid origin: {grid_origin}, shape: {grid_shape}")
 
         # Decide sequential vs parallel
@@ -502,7 +508,7 @@ class DensityAction(Action):
                 self.log.info(f"Wrote {dg_path}")
 
             # Clean up memmap temp file
-            if hasattr(count_data, 'filename') and count_data.filename:
+            if hasattr(count_data, "filename") and count_data.filename:
                 try:
                     os.remove(count_data.filename)
                 except OSError:
@@ -638,24 +644,28 @@ class DensityAction(Action):
             # Only COM probes
             if com_residue_indices:
                 for name, res_indices in com_residue_indices.items():
-                    probes.append(ProbeConfig(
-                        name=name,
-                        is_com=True,
-                        residue_indices=res_indices,
-                    ))
+                    probes.append(
+                        ProbeConfig(
+                            name=name,
+                            is_com=True,
+                            residue_indices=res_indices,
+                        )
+                    )
             return probes
 
         # From selections (requires MDAnalysis trajectory)
         if probe_selections:
-            if hasattr(trajectory, 'select_atoms'):
+            if hasattr(trajectory, "select_atoms"):
                 for name, selection in probe_selections.items():
                     try:
                         indices = trajectory.select_atoms(selection)
-                        probes.append(ProbeConfig(
-                            name=name,
-                            selection=selection,
-                            atom_indices=indices,
-                        ))
+                        probes.append(
+                            ProbeConfig(
+                                name=name,
+                                selection=selection,
+                                atom_indices=indices,
+                            )
+                        )
                         self.log.debug(f"Probe {name}: {len(indices)} atoms from '{selection}'")
                     except Exception as e:
                         self.log.warning(f"Failed to select probe {name}: {e}")
@@ -668,19 +678,23 @@ class DensityAction(Action):
         # From direct indices
         if probe_indices:
             for name, indices in probe_indices.items():
-                probes.append(ProbeConfig(
-                    name=name,
-                    atom_indices=np.asarray(indices),
-                ))
+                probes.append(
+                    ProbeConfig(
+                        name=name,
+                        atom_indices=np.asarray(indices),
+                    )
+                )
 
         # Add COM probes if requested
         if include_com and com_residue_indices:
             for name, res_indices in com_residue_indices.items():
-                probes.append(ProbeConfig(
-                    name=f"{name}_COM",
-                    is_com=True,
-                    residue_indices=res_indices,
-                ))
+                probes.append(
+                    ProbeConfig(
+                        name=f"{name}_COM",
+                        is_com=True,
+                        residue_indices=res_indices,
+                    )
+                )
 
         return probes
 
@@ -688,10 +702,10 @@ class DensityAction(Action):
         """Validate inputs."""
         errors = super().validate(trajectory, **kwargs)
 
-        probe_selections = kwargs.get('probe_selections')
-        probe_indices = kwargs.get('probe_indices')
-        only_com = kwargs.get('only_com', False)
-        com_residue_indices = kwargs.get('com_residue_indices')
+        probe_selections = kwargs.get("probe_selections")
+        probe_indices = kwargs.get("probe_indices")
+        only_com = kwargs.get("only_com", False)
+        com_residue_indices = kwargs.get("com_residue_indices")
 
         if not probe_selections and not probe_indices and not only_com:
             errors.append("Either probe_selections, probe_indices, or only_com must be provided")
@@ -699,7 +713,7 @@ class DensityAction(Action):
         if only_com and not com_residue_indices:
             errors.append("only_com requires com_residue_indices")
 
-        subregion = kwargs.get('subregion')
+        subregion = kwargs.get("subregion")
         if subregion:
             if len(subregion) != 2 or len(subregion[0]) != 3 or len(subregion[1]) != 3:
                 errors.append("subregion must be ((x0,y0,z0), (x1,y1,z1))")
@@ -798,9 +812,7 @@ class DensityProteinAction(Action):
                 break
 
         # Calculate grid parameters
-        grid_origin, grid_shape = _calculate_grid_params(
-            ref_coords, spacing, padding, sub
-        )
+        grid_origin, grid_shape = _calculate_grid_params(ref_coords, spacing, padding, sub)
         self.log.info(f"Grid origin: {grid_origin}, shape: {grid_shape}")
 
         if n_workers > 1:
@@ -829,7 +841,7 @@ class DensityProteinAction(Action):
         self.log.info(f"Wrote {output_path}")
 
         # Clean up memmap if used
-        if hasattr(count_grid, 'filename') and count_grid.filename:
+        if hasattr(count_grid, "filename") and count_grid.filename:
             try:
                 os.remove(count_grid.filename)
             except OSError:
@@ -1023,9 +1035,7 @@ class DensityAllHAAction(Action):
                 break
 
         # Calculate grid parameters
-        grid_origin, grid_shape = _calculate_grid_params(
-            ref_coords, spacing, padding, sub
-        )
+        grid_origin, grid_shape = _calculate_grid_params(ref_coords, spacing, padding, sub)
 
         if n_workers > 1:
             self.log.info(f"Using parallel processing with {n_workers} workers")
@@ -1056,7 +1066,7 @@ class DensityAllHAAction(Action):
             output_files.append(output_path)
 
             # Clean up memmap
-            if hasattr(count_data, 'filename') and count_data.filename:
+            if hasattr(count_data, "filename") and count_data.filename:
                 try:
                     os.remove(count_data.filename)
                 except OSError:
@@ -1216,16 +1226,18 @@ class CpptrajDensityAction(Action):
 
     def run(
         self,
-        topology: Path,
-        trajectory_pattern: str | list[str],
-        probe_masks: dict[str, str],
-        grid_dimensions: tuple[int, int, int],
-        grid_origin: tuple[float, float, float],
+        trajectory=None,
+        reference=None,
+        output_dir: Path | None = None,
+        topology: Path | None = None,
+        trajectory_pattern: str | list[str] | None = None,
+        probe_masks: dict[str, str] | None = None,
+        grid_dimensions: tuple[int, int, int] | None = None,
+        grid_origin: tuple[float, float, float] | None = None,
         grid_spacing: float = 0.5,
         include_com: bool = False,
         only_com: bool = False,
         com_mask: str | None = None,
-        output_dir: Path | None = None,
         output_prefix: str = "",
         n_threads: int | None = None,
         wait_completion: bool = True,
@@ -1236,11 +1248,38 @@ class CpptrajDensityAction(Action):
         import shutil
         import subprocess
 
+        # Validate required parameters
+        if topology is None:
+            return ActionResult(
+                success=False,
+                error="topology is required for CpptrajDensityAction.run()",
+            )
+        if trajectory_pattern is None:
+            return ActionResult(
+                success=False,
+                error="trajectory_pattern is required for CpptrajDensityAction.run()",
+            )
+        if probe_masks is None:
+            return ActionResult(
+                success=False,
+                error="probe_masks is required for CpptrajDensityAction.run()",
+            )
+        if grid_dimensions is None:
+            return ActionResult(
+                success=False,
+                error="grid_dimensions is required for CpptrajDensityAction.run()",
+            )
+        if grid_origin is None:
+            return ActionResult(
+                success=False,
+                error="grid_origin is required for CpptrajDensityAction.run()",
+            )
+
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Find cpptraj
-        cpptraj = os.environ.get('AMBER_PTRAJ', shutil.which('cpptraj'))
+        cpptraj = os.environ.get("AMBER_PTRAJ", shutil.which("cpptraj"))
         if not cpptraj:
             return ActionResult(
                 success=False,
@@ -1262,10 +1301,7 @@ class CpptrajDensityAction(Action):
             )
 
         # Calculate grid center from origin and dimensions
-        grid_center = [
-            grid_origin[i] + (grid_dimensions[i] * grid_spacing) / 2
-            for i in range(3)
-        ]
+        grid_center = [grid_origin[i] + (grid_dimensions[i] * grid_spacing) / 2 for i in range(3)]
 
         # Determine which probes to calculate
         if only_com:
@@ -1315,7 +1351,7 @@ quit
 """
 
             script_path = output_dir / f"{output_prefix}{probe_name}.cpptraj"
-            with open(script_path, 'w') as f:
+            with open(script_path, "w") as f:
                 f.write(script_content)
             scripts.append(script_path)
 
@@ -1324,20 +1360,20 @@ quit
         # Run cpptraj for each probe
         for script_path in scripts:
             probe_name = script_path.stem.replace(output_prefix, "")
-            log_path = script_path.with_suffix('.log')
+            log_path = script_path.with_suffix(".log")
 
-            cmd = [cpptraj, '-i', str(script_path)]
+            cmd = [cpptraj, "-i", str(script_path)]
             if n_threads:
                 # cpptraj OpenMP threads via environment
                 env = os.environ.copy()
-                env['OMP_NUM_THREADS'] = str(n_threads)
+                env["OMP_NUM_THREADS"] = str(n_threads)
             else:
                 env = None
 
             self.log.info(f"Running cpptraj for {probe_name}")
 
             if wait_completion:
-                with open(log_path, 'w') as log_file:
+                with open(log_path, "w") as log_file:
                     result = subprocess.run(
                         cmd,
                         stdout=log_file,
@@ -1351,7 +1387,7 @@ quit
                 # Background execution
                 subprocess.Popen(
                     cmd,
-                    stdout=open(log_path, 'w'),
+                    stdout=open(log_path, "w"),
                     stderr=subprocess.STDOUT,
                     env=env,
                     cwd=str(output_dir),
@@ -1425,8 +1461,8 @@ def calculate_density(
     # Read back the grids
     grids = {}
     for path in result.output_files:
-        if path.suffix == '.dx':
-            name = path.stem.replace('_density', '')
+        if path.suffix == ".dx":
+            name = path.stem.replace("_density", "")
             grids[name] = Grid.read_dx(path)
 
     return grids

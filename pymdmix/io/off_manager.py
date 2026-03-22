@@ -32,16 +32,19 @@ log = logging.getLogger(__name__)
 
 class OFFManagerError(Exception):
     """Base exception for OFFManager errors."""
+
     pass
 
 
 class OFFSectionError(OFFManagerError):
     """Raised when a requested section is not found in the OFF file."""
+
     pass
 
 
 class OFFUnitNotFoundError(OFFManagerError):
     """Raised when a requested unit is not found in the OFF file."""
+
     pass
 
 
@@ -63,6 +66,7 @@ class Atom:
     charge : float
         Partial charge
     """
+
     id: int
     name: str
     atom_type: str
@@ -97,6 +101,7 @@ class Residue:
     xyz : np.ndarray
         Coordinates (N x 3)
     """
+
     name: str
     atoms: list[Atom] = field(default_factory=list)
     connectivity: list[tuple[int, int]] = field(default_factory=list)
@@ -191,11 +196,20 @@ class OFFManager:
     """
 
     SECTIONS = [
-        'atoms', 'atomspertinfo', 'boundbox',
-        'childsequence', 'connect', 'connectivity',
-        'hierarchy', 'name', 'positions', 'residueconnect',
-        'residues', 'residuesPdbSequenceNumber', 'solventcap',
-        'velocities'
+        "atoms",
+        "atomspertinfo",
+        "boundbox",
+        "childsequence",
+        "connect",
+        "connectivity",
+        "hierarchy",
+        "name",
+        "positions",
+        "residueconnect",
+        "residues",
+        "residuesPdbSequenceNumber",
+        "solventcap",
+        "velocities",
     ]
 
     def __init__(self, content: str):
@@ -260,7 +274,7 @@ class OFFManager:
 
     def _iter_lines(self) -> Iterator[str]:
         """Return file content as an iterable of lines."""
-        return iter(self._content.split('\n'))
+        return iter(self._content.split("\n"))
 
     def get_residue(self, unit: str, skip_h: bool = False) -> Residue:
         """
@@ -301,7 +315,7 @@ class OFFManager:
         np.ndarray
             Coordinates array of shape (N, 3)
         """
-        positions = self.read_off_section(unit, 'positions')
+        positions = self.read_off_section(unit, "positions")
         xyz = np.array([line.split() for line in positions], dtype=np.float32)
         return xyz
 
@@ -322,7 +336,7 @@ class OFFManager:
             List of bonded atom pairs (bidirectional)
         """
         try:
-            connect_info = self.read_off_section(unit, 'connectivity')
+            connect_info = self.read_off_section(unit, "connectivity")
         except OFFSectionError:
             return []
 
@@ -355,7 +369,7 @@ class OFFManager:
             List of Atom instances
         """
         atom_list = []
-        atom_info = self.read_off_section(unit, 'atoms')
+        atom_info = self.read_off_section(unit, "atoms")
 
         for line in atom_info:
             parts = line.split()
@@ -363,7 +377,7 @@ class OFFManager:
                 continue
 
             # Column indices based on OFF format:
-            # 0=name, 1=type, 2=typex, 3=reession, 4=residuePdbSeq, 
+            # 0=name, 1=type, 2=typex, 3=reession, 4=residuePdbSeq,
             # 5=flags, 6=sequence, 7=elmnt, 8=charge
             element = int(parts[7])
             if skip_h and element == 1:
@@ -438,9 +452,9 @@ class OFFManager:
         bool
             True if it's a parameter unit
         """
-        matches = self._find(f'!entry.{unit}.')
+        matches = self._find(f"!entry.{unit}.")
         if matches:
-            return 'parm' in matches[0]
+            return "parm" in matches[0]
         return False
 
     def _find(self, expr: str, return_lines: bool = True) -> list[str] | int | bool:
@@ -460,8 +474,9 @@ class OFFManager:
             Matching lines, count, or False if no match
         """
         import fnmatch
+
         lines = list(self._iter_lines())
-        matches = fnmatch.filter(lines, f'*{expr}*')
+        matches = fnmatch.filter(lines, f"*{expr}*")
 
         if not matches:
             return False
@@ -485,12 +500,12 @@ class OFFManager:
         list[str]
             Residue names
         """
-        section = self.read_off_section(unit, 'residues')
+        section = self.read_off_section(unit, "residues")
         res_names = []
         for line in section:
             parts = line.split()
             if parts:
-                res_names.append(parts[0].replace('"', ''))
+                res_names.append(parts[0].replace('"', ""))
 
         if unique:
             return list(set(res_names))
@@ -519,7 +534,7 @@ class OFFManager:
         OFFSectionError
             If section not found
         """
-        search = f'!entry.{unit}.unit.{section}'
+        search = f"!entry.{unit}.unit.{section}"
         lines = self._iter_lines()
 
         # Find section start
@@ -536,7 +551,7 @@ class OFFManager:
 
         # Read until next section
         line = next(lines, None)
-        while line is not None and '!entry' not in line:
+        while line is not None and "!entry" not in line:
             out.append(line.strip())
             line = next(lines, None)
 
@@ -582,7 +597,7 @@ class OFFManager:
             Atom count
         """
         n_res = self.get_num_res(unit, residue)
-        section = self.read_off_section(residue, 'atoms')
+        section = self.read_off_section(residue, "atoms")
         n = sum(1 for line in section if atom_name in line)
         return n * n_res
 
@@ -600,7 +615,7 @@ class OFFManager:
         list[float]
             Box dimensions [x, y, z] (or [angle, x, y, z] depending on format)
         """
-        box_section = self.read_off_section(unit, 'boundbox')
+        box_section = self.read_off_section(unit, "boundbox")
         # Skip first two lines (box type info), read dimensions
         return [float(x) for x in box_section[2:]]
 
@@ -655,9 +670,9 @@ class OFFManager:
         Path
             Path to temporary file
         """
-        fd, tmp_path = tempfile.mkstemp(suffix='.off')
+        fd, tmp_path = tempfile.mkstemp(suffix=".off")
         self._tmpfile = Path(tmp_path)
-        with open(fd, 'w') as f:
+        with open(fd, "w") as f:
             f.write(self._content)
         return self._tmpfile
 

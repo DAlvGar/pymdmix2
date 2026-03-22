@@ -127,7 +127,7 @@ NPROD = 20        # Number of production files (1 per ns default)
 # Write trajectory every N steps
 TRAJFREQ = 5000   # = 10 ps at 2 fs timestep
 
-# Write energies every N steps  
+# Write energies every N steps
 OUTFREQ = 500     # = 1 ps
 
 # Write restart every N steps

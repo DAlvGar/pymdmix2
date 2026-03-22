@@ -40,6 +40,7 @@ from numpy.typing import NDArray
 
 try:
     from scipy.cluster.hierarchy import fclusterdata
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -74,6 +75,7 @@ class Hotspot:
     energies : NDArray
         Energy at each coordinate
     """
+
     id: int
     probe: str
     centroid: tuple[float, float, float]
@@ -148,18 +150,24 @@ class HotspotAction(Action):
 
     def run(
         self,
-        grids: dict[str, Grid],
+        trajectory=None,
+        reference=None,
+        output_dir: Path | None = None,
+        grids: dict[str, Grid] | None = None,
         energy_cutoff: float = -0.5,
         cluster_distance: float = 2.0,
         min_points: int = 3,
         temperature: float = 300.0,
-        output_dir: Path | None = None,
         output_prefix: str = "",
-        trajectory=None,  # Not used but required by base
-        reference=None,
         **kwargs,
     ) -> ActionResult:
         """Execute hotspot detection."""
+
+        if grids is None:
+            return ActionResult(
+                success=False,
+                error="grids must be provided to HotspotAction.run()",
+            )
 
         if not HAS_SCIPY:
             return ActionResult(
@@ -195,10 +203,7 @@ class HotspotAction(Action):
 
             # Get coordinates and energies of favorable points
             indices = np.argwhere(mask)
-            coords = np.array([
-                dg_grid.index_to_coord(tuple(idx))
-                for idx in indices
-            ])
+            coords = np.array([dg_grid.index_to_coord(tuple(idx)) for idx in indices])
             energies = dg_grid.data[mask]
 
             # Cluster points
@@ -210,8 +215,8 @@ class HotspotAction(Action):
             clusters = fclusterdata(
                 coords,
                 t=cluster_distance,
-                criterion='distance',
-                method='complete',
+                criterion="distance",
+                method="complete",
             )
 
             n_clusters = clusters.max()
@@ -231,7 +236,7 @@ class HotspotAction(Action):
                 centroid = tuple(cluster_coords[min_idx])
 
                 # Calculate volume (n_points * voxel_volume)
-                voxel_volume = density_grid.spacing ** 3
+                voxel_volume = density_grid.spacing**3
                 volume = len(cluster_coords) * voxel_volume
 
                 # Volume-weighted energy
@@ -267,7 +272,7 @@ class HotspotAction(Action):
             "temperature": temperature,
             "hotspots": [h.to_dict() for h in all_hotspots],
         }
-        with open(json_path, 'w') as f:
+        with open(json_path, "w") as f:
             json.dump(json_data, f, indent=2)
         output_files.append(json_path)
 
@@ -293,7 +298,7 @@ class HotspotAction(Action):
 
     def _write_hotspots_pdb(self, hotspots: list[Hotspot], path: Path) -> None:
         """Write hotspots as PDB file with B-factors as energy."""
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write("REMARK  Binding hotspots from pyMDMix\n")
             f.write("REMARK  B-factor column contains energy (kcal/mol)\n")
 
@@ -321,7 +326,7 @@ class HotspotAction(Action):
         cluster_distance: float,
     ) -> None:
         """Write human-readable summary."""
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write("Hotspot Detection Summary\n")
             f.write("=========================\n\n")
             f.write(f"Energy cutoff: {energy_cutoff} kcal/mol\n")
@@ -339,7 +344,9 @@ class HotspotAction(Action):
                 f.write(f"{'ID':>4} {'Energy':>8} {'Volume':>8} {'Centroid':<30}\n")
 
                 for hs in probe_hotspots:
-                    centroid_str = f"({hs.centroid[0]:.1f}, {hs.centroid[1]:.1f}, {hs.centroid[2]:.1f})"
+                    centroid_str = (
+                        f"({hs.centroid[0]:.1f}, {hs.centroid[1]:.1f}, {hs.centroid[2]:.1f})"
+                    )
                     f.write(f"{hs.id:>4} {hs.energy:>8.2f} {hs.volume:>8.1f} {centroid_str:<30}\n")
 
     def validate(self, trajectory=None, **kwargs) -> list[str]:
@@ -349,7 +356,7 @@ class HotspotAction(Action):
         if not HAS_SCIPY:
             errors.append("scipy is required for hotspot detection")
 
-        grids = kwargs.get('grids')
+        grids = kwargs.get("grids")
         if not grids:
             errors.append("grids dictionary is required")
 
@@ -404,13 +411,14 @@ def detect_hotspots(
 # HotSpotSet - Collection with clustering and filtering
 # =============================================================================
 
+
 @dataclass
 class HotSpotSet:
     """
     Collection of hotspots with clustering and filtering capabilities.
-    
+
     Replaces legacy HotSpotSet class with modern implementation.
-    
+
     Attributes
     ----------
     probe : str
@@ -421,7 +429,7 @@ class HotSpotSet:
         List of hotspots in the set
     info : str
         Description or metadata
-        
+
     Examples
     --------
     >>> hs_set = HotSpotSet(probe="OH", name="hydroxyl_sites")
@@ -429,55 +437,55 @@ class HotSpotSet:
     >>> filtered = hs_set.prune_by_energy(-1.0)
     >>> clusters = hs_set.cluster(cutoff=2.5)
     """
-    
+
     probe: str = ""
     name: str = ""
     hotspots: list[Hotspot] = field(default_factory=list)
     info: str = ""
-    
+
     # Cached distance matrix and clustering
     _distance_matrix: NDArray | None = field(default=None, repr=False)
     _cluster_labels: NDArray | None = field(default=None, repr=False)
-    
+
     def __post_init__(self):
         # Sort hotspots by energy (ascending)
         self.hotspots.sort(key=lambda h: h.energy)
-    
+
     def __len__(self) -> int:
         return len(self.hotspots)
-    
+
     def __iter__(self):
         return iter(self.hotspots)
-    
+
     def __getitem__(self, idx: int) -> Hotspot:
         return self.hotspots[idx]
-    
+
     @property
     def n_hotspots(self) -> int:
         """Number of hotspots in set."""
         return len(self.hotspots)
-    
+
     @property
     def centroids(self) -> NDArray:
         """Array of hotspot centroid coordinates."""
         if not self.hotspots:
             return np.empty((0, 3))
         return np.array([h.centroid for h in self.hotspots])
-    
+
     @property
     def energies(self) -> NDArray:
         """Array of hotspot energies."""
         return np.array([h.energy for h in self.hotspots])
-    
+
     @property
     def volumes(self) -> NDArray:
         """Array of hotspot volumes."""
         return np.array([h.volume for h in self.hotspots])
-    
+
     def add_hotspots(self, hotspots: Hotspot | list[Hotspot]) -> None:
         """
         Add hotspot(s) to the set.
-        
+
         Parameters
         ----------
         hotspots : Hotspot or list[Hotspot]
@@ -487,21 +495,21 @@ class HotSpotSet:
             self.hotspots.extend(hotspots)
         else:
             self.hotspots.append(hotspots)
-        
+
         # Re-sort and invalidate cache
         self.hotspots.sort(key=lambda h: h.energy)
         self._distance_matrix = None
         self._cluster_labels = None
-    
+
     def get_by_id(self, ids: int | list[int]) -> list[Hotspot]:
         """
         Get hotspots by ID.
-        
+
         Parameters
         ----------
         ids : int or list[int]
             Hotspot ID(s) to retrieve
-            
+
         Returns
         -------
         list[Hotspot]
@@ -510,11 +518,11 @@ class HotSpotSet:
         if isinstance(ids, int):
             ids = [ids]
         return [h for h in self.hotspots if h.id in ids]
-    
+
     def compute_distance_matrix(self) -> NDArray:
         """
         Compute pairwise distance matrix between hotspot centroids.
-        
+
         Returns
         -------
         NDArray
@@ -522,28 +530,28 @@ class HotSpotSet:
         """
         if self._distance_matrix is not None:
             return self._distance_matrix
-        
+
         if len(self.hotspots) < 2:
             return np.array([[]])
-        
+
         from scipy.spatial import distance
-        
+
         centroids = self.centroids
         condensed = distance.pdist(centroids)
         self._distance_matrix = distance.squareform(condensed)
         return self._distance_matrix
-    
-    def cluster(self, cutoff: float = 2.5, method: str = 'average') -> NDArray:
+
+    def cluster(self, cutoff: float = 2.5, method: str = "average") -> NDArray:
         """
         Cluster hotspots by distance.
-        
+
         Parameters
         ----------
         cutoff : float
             Distance cutoff for clustering (Å)
         method : str
             Linkage method ('average', 'single', 'complete', 'ward')
-            
+
         Returns
         -------
         NDArray
@@ -551,70 +559,68 @@ class HotSpotSet:
         """
         if not HAS_SCIPY:
             raise ImportError("scipy is required for clustering")
-        
+
         if len(self.hotspots) < 2:
             return np.array([1] if self.hotspots else [])
-        
-        from scipy.cluster.hierarchy import linkage, fcluster
+
+        from scipy.cluster.hierarchy import fcluster, linkage
         from scipy.spatial.distance import pdist
-        
+
         centroids = self.centroids
         condensed = pdist(centroids)
         Z = linkage(condensed, method=method)
-        self._cluster_labels = fcluster(Z, t=cutoff, criterion='distance')
-        
+        self._cluster_labels = fcluster(Z, t=cutoff, criterion="distance")
+
         return self._cluster_labels
-    
+
     @property
     def n_clusters(self) -> int:
         """Number of clusters (after clustering)."""
         if self._cluster_labels is None:
             return 0
         return len(np.unique(self._cluster_labels))
-    
-    def get_cluster_representatives(self, cutoff: float = 2.5) -> "HotSpotSet":
+
+    def get_cluster_representatives(self, cutoff: float = 2.5) -> HotSpotSet:
         """
         Get one representative hotspot per cluster (lowest energy).
-        
+
         Parameters
         ----------
         cutoff : float
             Distance cutoff for clustering
-            
+
         Returns
         -------
         HotSpotSet
             New set with one hotspot per cluster
         """
         labels = self.cluster(cutoff=cutoff)
-        
+
         representatives = []
         for cluster_id in np.unique(labels):
             cluster_hotspots = [
-                self.hotspots[i] 
-                for i, label in enumerate(labels) 
-                if label == cluster_id
+                self.hotspots[i] for i, label in enumerate(labels) if label == cluster_id
             ]
             # Take lowest energy hotspot in cluster
             best = min(cluster_hotspots, key=lambda h: h.energy)
             representatives.append(best)
-        
+
         return HotSpotSet(
             probe=self.probe,
             name=f"{self.name}_clustered",
             hotspots=representatives,
             info=f"Clustered with cutoff={cutoff}Å",
         )
-    
-    def prune_by_energy(self, max_energy: float) -> "HotSpotSet":
+
+    def prune_by_energy(self, max_energy: float) -> HotSpotSet:
         """
         Remove hotspots above energy threshold.
-        
+
         Parameters
         ----------
         max_energy : float
             Maximum allowed energy (kcal/mol)
-            
+
         Returns
         -------
         HotSpotSet
@@ -627,16 +633,16 @@ class HotSpotSet:
             hotspots=filtered,
             info=f"Pruned by energy <= {max_energy}",
         )
-    
-    def prune_by_volume(self, min_volume: float) -> "HotSpotSet":
+
+    def prune_by_volume(self, min_volume: float) -> HotSpotSet:
         """
         Remove hotspots below volume threshold.
-        
+
         Parameters
         ----------
         min_volume : float
             Minimum required volume (Å³)
-            
+
         Returns
         -------
         HotSpotSet
@@ -649,16 +655,16 @@ class HotSpotSet:
             hotspots=filtered,
             info=f"Pruned by volume >= {min_volume}",
         )
-    
-    def prune_by_n_points(self, min_points: int) -> "HotSpotSet":
+
+    def prune_by_n_points(self, min_points: int) -> HotSpotSet:
         """
         Remove hotspots with too few points.
-        
+
         Parameters
         ----------
         min_points : int
             Minimum required grid points
-            
+
         Returns
         -------
         HotSpotSet
@@ -671,7 +677,7 @@ class HotSpotSet:
             hotspots=filtered,
             info=f"Pruned by n_points >= {min_points}",
         )
-    
+
     def find_nearest(
         self,
         coord: tuple[float, float, float] | NDArray,
@@ -679,14 +685,14 @@ class HotSpotSet:
     ) -> Hotspot | None:
         """
         Find hotspot nearest to a coordinate.
-        
+
         Parameters
         ----------
         coord : tuple or NDArray
             3D coordinate
         max_distance : float
             Maximum allowed distance (returns None if exceeded)
-            
+
         Returns
         -------
         Hotspot | None
@@ -694,20 +700,20 @@ class HotSpotSet:
         """
         if not self.hotspots:
             return None
-        
+
         coord = np.asarray(coord)
         distances = np.linalg.norm(self.centroids - coord, axis=1)
         min_idx = distances.argmin()
         min_dist = distances[min_idx]
-        
+
         if min_dist <= max_distance:
             return self.hotspots[min_idx]
         return None
-    
+
     def to_pdb(self, path: str | Path, only_centroids: bool = True) -> None:
         """
         Write hotspots to PDB file.
-        
+
         Parameters
         ----------
         path : str or Path
@@ -716,19 +722,19 @@ class HotSpotSet:
             If True, write only centroids. If False, write all coordinates.
         """
         path = Path(path)
-        
-        with open(path, 'w') as f:
+
+        with open(path, "w") as f:
             f.write(f"REMARK  HotSpotSet: {self.name}\n")
             f.write(f"REMARK  Probe: {self.probe}\n")
             f.write(f"REMARK  N hotspots: {len(self.hotspots)}\n")
-            
+
             atom_num = 1
             for hs in self.hotspots:
                 if only_centroids:
                     coords_to_write = [hs.centroid]
                 else:
                     coords_to_write = hs.coords.tolist()
-                
+
                 for coord in coords_to_write:
                     x, y, z = coord
                     probe = hs.probe[:3].upper()
@@ -738,20 +744,20 @@ class HotSpotSet:
                         f"  1.00{hs.energy:6.2f}           C\n"
                     )
                     atom_num += 1
-            
+
             f.write("END\n")
-    
+
     def to_json(self, path: str | Path) -> None:
         """
         Write hotspots to JSON file.
-        
+
         Parameters
         ----------
         path : str or Path
             Output file path
         """
         path = Path(path)
-        
+
         data = {
             "probe": self.probe,
             "name": self.name,
@@ -759,10 +765,10 @@ class HotSpotSet:
             "n_hotspots": len(self.hotspots),
             "hotspots": [h.to_dict() for h in self.hotspots],
         }
-        
-        with open(path, 'w') as f:
+
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
-    
+
     def summary(self) -> str:
         """Get human-readable summary."""
         lines = [
@@ -771,23 +777,27 @@ class HotSpotSet:
             f"N hotspots: {len(self.hotspots)}",
             "-" * 40,
         ]
-        
+
         if self.hotspots:
-            lines.append(f"Energy range: {self.energies.min():.2f} to {self.energies.max():.2f} kcal/mol")
+            lines.append(
+                f"Energy range: {self.energies.min():.2f} to {self.energies.max():.2f} kcal/mol"
+            )
             lines.append(f"Volume range: {self.volumes.min():.1f} to {self.volumes.max():.1f} Å³")
             lines.append("")
             lines.append(f"{'ID':>4} {'Energy':>8} {'Volume':>8} {'Points':>6}")
-            
+
             for hs in self.hotspots[:10]:  # Show first 10
                 lines.append(f"{hs.id:>4} {hs.energy:>8.2f} {hs.volume:>8.1f} {hs.n_points:>6}")
-            
+
             if len(self.hotspots) > 10:
                 lines.append(f"... and {len(self.hotspots) - 10} more")
-        
+
         return "\n".join(lines)
-    
+
     def __str__(self) -> str:
         return f"HotSpotSet({self.name}, {self.probe}, n={len(self.hotspots)})"
-    
+
     def __repr__(self) -> str:
-        return f"HotSpotSet(probe={self.probe!r}, name={self.name!r}, n_hotspots={len(self.hotspots)})"
+        return (
+            f"HotSpotSet(probe={self.probe!r}, name={self.name!r}, n_hotspots={len(self.hotspots)})"
+        )

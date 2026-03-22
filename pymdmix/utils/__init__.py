@@ -4,6 +4,7 @@ pyMDMix Utilities
 
 Utility functions for path handling, mask parsing, logging, and configuration.
 """
+
 from __future__ import annotations
 
 from pymdmix.utils.settings_parser import (

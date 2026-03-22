@@ -20,8 +20,8 @@ Examples
 """
 
 from pymdmix.project.config import Config, MDSettings
-from pymdmix.project.replica import Replica, ReplicaState
 from pymdmix.project.project import Project
+from pymdmix.project.replica import Replica, ReplicaState
 
 __all__ = [
     "Config",

@@ -14,8 +14,8 @@ The codebase has **deep entanglement** with Biskit, not just simple imports.
 # PDB.py - Direct subclass
 class SolvatedPDB(bi.PDBModel):
     """Custom PDB handling for solvated systems"""
-    
-# AutoPrepare.py - Inherits Amber tools  
+
+# AutoPrepare.py - Inherits Amber tools
 class AmberPDBCleaner(bi.AmberParmBuilder):
     """Structure cleaning with ACE/NME capping"""
 ```
@@ -50,7 +50,7 @@ class AmberPDBCleaner(bi.AmberParmBuilder):
 ```python
 # Biskit PDBModel provides:
 pdb['residue_name']      # Array of all residue names
-pdb['serial_number']     # Array of atom numbers  
+pdb['serial_number']     # Array of atom numbers
 pdb.xyz                  # Coordinates array
 
 # parmed Structure provides:
@@ -77,18 +77,18 @@ Create a `SolvatedStructure` class that wraps parmed.Structure and provides Bisk
 ```python
 class SolvatedStructure:
     """parmed.Structure with Biskit-like convenience methods."""
-    
+
     def __init__(self, source: str | Path | parmed.Structure):
         if isinstance(source, parmed.Structure):
             self._struct = source
         else:
             self._struct = parmed.load_file(str(source))
         self._cache = {}  # Cache expensive operations
-    
+
     @property
     def xyz(self) -> np.ndarray:
         return self._struct.coordinates
-    
+
     def __getitem__(self, key: str) -> np.ndarray:
         """Biskit-style attribute access."""
         if key == 'residue_name':
@@ -96,32 +96,32 @@ class SolvatedStructure:
         elif key == 'serial_number':
             return np.array([a.idx + 1 for a in self._struct.atoms])
         # ... etc
-    
+
     def mask_from(self, attr: str, values: list) -> np.ndarray:
         """Create boolean mask where attribute matches values."""
         data = self[attr]
         return np.isin(data, values)
-    
+
     def compress(self, mask: np.ndarray) -> SolvatedStructure:
         """Return new structure with only masked atoms."""
         # parmed doesn't have direct mask support, need to build selection
         indices = np.where(mask)[0]
         new_struct = self._struct[indices]  # If supported
         return SolvatedStructure(new_struct)
-    
+
     def mask_protein(self) -> np.ndarray:
         return get_protein_mask(self._struct)
-    
+
     def mask_heavy(self) -> np.ndarray:
         return np.array([a.element != 1 for a in self._struct.atoms])
-    
+
     def mask_backbone(self) -> np.ndarray:
         bb_names = {'CA', 'C', 'N', 'O'}
         return np.array([a.name in bb_names for a in self._struct.atoms])
-    
+
     def write_pdb(self, path: str | Path) -> None:
         self._struct.save(str(path), overwrite=True)
-    
+
     # ... implement remaining methods
 ```
 
@@ -174,7 +174,7 @@ pymdmix2/pymdmix/core/solvated_structure.py
 
 Key methods needed:
 - [ ] `__getitem__` for attribute arrays
-- [ ] `mask_from()` 
+- [ ] `mask_from()`
 - [ ] `compress()` / `take()`
 - [ ] `concat()`
 - [ ] `mask_heavy()`, `mask_backbone()`, `mask_hydrogen()`

@@ -1,5 +1,5 @@
 """Tests for pymdmix CLI."""
-import json
+
 from pathlib import Path
 
 import pytest
@@ -24,13 +24,14 @@ def temp_dir(tmp_path):
 # Basic CLI Tests
 # =============================================================================
 
+
 class TestBasicCLI:
     def test_version(self, runner):
         """Test --version flag."""
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
         assert "pyMDMix" in result.output
-    
+
     def test_help(self, runner):
         """Test --help flag."""
         result = runner.invoke(cli, ["--help"])
@@ -44,6 +45,7 @@ class TestBasicCLI:
 # Create Command Tests
 # =============================================================================
 
+
 class TestCreateCommands:
     def test_create_help(self, runner):
         """Test create subcommand help."""
@@ -51,28 +53,26 @@ class TestCreateCommands:
         assert result.exit_code == 0
         assert "project" in result.output
         assert "replica" in result.output
-    
+
     def test_create_project(self, runner, temp_dir):
         """Test creating a project."""
         with runner.isolated_filesystem(temp_dir=temp_dir):
             result = runner.invoke(cli, ["create", "project", "-n", "test_project"])
-            
+
             assert result.exit_code == 0
             assert "created successfully" in result.output
-            
+
             # Check project directory was created
             project_dir = Path("test_project")
             assert project_dir.exists()
-    
+
     def test_create_project_custom_dir(self, runner, temp_dir):
         """Test creating a project in custom directory."""
         with runner.isolated_filesystem(temp_dir=temp_dir):
-            result = runner.invoke(cli, [
-                "create", "project", 
-                "-n", "myproject",
-                "-d", "custom_location"
-            ])
-            
+            result = runner.invoke(
+                cli, ["create", "project", "-n", "myproject", "-d", "custom_location"]
+            )
+
             assert result.exit_code == 0
             assert Path("custom_location").exists()
 
@@ -81,6 +81,7 @@ class TestCreateCommands:
 # Setup Command Tests
 # =============================================================================
 
+
 class TestSetupCommands:
     def test_setup_help(self, runner):
         """Test setup subcommand help."""
@@ -88,7 +89,7 @@ class TestSetupCommands:
         assert result.exit_code == 0
         assert "prepare" in result.output
         assert "solvate" in result.output
-    
+
     def test_prepare_help(self, runner):
         """Test prepare command help."""
         result = runner.invoke(cli, ["setup", "prepare", "--help"])
@@ -101,6 +102,7 @@ class TestSetupCommands:
 # Analyze Command Tests
 # =============================================================================
 
+
 class TestAnalyzeCommands:
     def test_analyze_help(self, runner):
         """Test analyze subcommand help."""
@@ -108,14 +110,14 @@ class TestAnalyzeCommands:
         assert result.exit_code == 0
         assert "density" in result.output
         assert "hotspots" in result.output
-    
+
     def test_density_help(self, runner):
         """Test density command help."""
         result = runner.invoke(cli, ["analyze", "density", "--help"])
         assert result.exit_code == 0
         assert "trajectory" in result.output
         assert "probe" in result.output
-    
+
     def test_hotspots_help(self, runner):
         """Test hotspots command help."""
         result = runner.invoke(cli, ["analyze", "hotspots", "--help"])
@@ -128,14 +130,15 @@ class TestAnalyzeCommands:
 # Info Command Tests
 # =============================================================================
 
+
 class TestInfoCommand:
     def test_info_solvents(self, runner):
         """Test listing solvents."""
         result = runner.invoke(cli, ["info", "--solvents"])
-        
+
         assert result.exit_code == 0
         assert "Available solvents" in result.output
-    
+
     def test_info_help(self, runner):
         """Test info command help."""
         result = runner.invoke(cli, ["info", "--help"])
@@ -147,6 +150,7 @@ class TestInfoCommand:
 # =============================================================================
 # Queue Command Tests
 # =============================================================================
+
 
 class TestQueueCommand:
     def test_queue_help(self, runner):
@@ -161,6 +165,7 @@ class TestQueueCommand:
 # Verbose Mode Tests
 # =============================================================================
 
+
 class TestVerboseMode:
     def test_verbose_flag(self, runner, temp_dir):
         """Test verbose flag passes through."""
@@ -173,20 +178,19 @@ class TestVerboseMode:
 # Error Handling Tests
 # =============================================================================
 
+
 class TestErrorHandling:
     def test_missing_required_arg(self, runner):
         """Test error when required argument missing."""
         result = runner.invoke(cli, ["analyze", "density"])
         # Should fail or show help since neither --project nor --trajectory given
         assert result.exit_code != 0 or "Specify either" in result.output
-    
+
     def test_file_not_found(self, runner):
         """Test error when file doesn't exist."""
-        result = runner.invoke(cli, [
-            "setup", "prepare", "/nonexistent/file.pdb"
-        ])
+        result = runner.invoke(cli, ["setup", "prepare", "/nonexistent/file.pdb"])
         assert result.exit_code != 0
-    
+
     def test_unknown_command(self, runner):
         """Test error for unknown command."""
         result = runner.invoke(cli, ["foobar"])

@@ -1,103 +1,101 @@
 """
 Tests for pymdmix.io.parsers and pymdmix.utils.settings_parser modules.
 """
+
 import os
 import tempfile
 
 import pytest
 
 from pymdmix.io.parsers import (
-    SystemConfigFileParser,
-    MDSettingsConfigFileParser,
-    ParserError,
-    SystemParserError,
     BadFile,
-    MDSettingsParserError,
     BadSolvent,
+    MDSettingsConfigFileParser,
+    MDSettingsParserError,
+    SystemConfigFileParser,
+    SystemParserError,
 )
 from pymdmix.utils.settings_parser import (
-    Setting,
-    SettingsParser,
-    SettingsManager,
     CaseSensitiveConfigParser,
-    SettingsError,
     InvalidValue,
-    InvalidFile,
+    Setting,
+    SettingsManager,
+    SettingsParser,
 )
-
 
 # =============================================================================
 # SettingsParser Tests
 # =============================================================================
+
 
 class TestSetting:
     """Tests for Setting class."""
 
     def test_setting_creation(self):
         """Test basic Setting creation."""
-        s = Setting(name='test', value='42', vtype=str)
-        assert s.name == 'test'
-        assert s.value == '42'
+        s = Setting(name="test", value="42", vtype=str)
+        assert s.name == "test"
+        assert s.value == "42"
         assert s.vtype == str
 
     def test_setting_type_cast_int(self):
         """Test type casting to int."""
-        s = Setting(name='count', value='42')
+        s = Setting(name="count", value="42")
         s.type_cast(int)
         assert s.value == 42
         assert s.vtype == int
 
     def test_setting_type_cast_float(self):
         """Test type casting to float."""
-        s = Setting(name='rate', value='3.14')
+        s = Setting(name="rate", value="3.14")
         s.type_cast(float)
         assert s.value == pytest.approx(3.14)
         assert s.vtype == float
 
     def test_setting_type_cast_bool_true(self):
         """Test type casting to bool (true)."""
-        for val in ['true', 'True', 'yes', '1', 'on']:
-            s = Setting(name='flag', value=val)
+        for val in ["true", "True", "yes", "1", "on"]:
+            s = Setting(name="flag", value=val)
             s.type_cast(bool)
             assert s.value is True
 
     def test_setting_type_cast_bool_false(self):
         """Test type casting to bool (false)."""
-        for val in ['false', 'False', 'no', '0', 'off']:
-            s = Setting(name='flag', value=val)
+        for val in ["false", "False", "no", "0", "off"]:
+            s = Setting(name="flag", value=val)
             s.type_cast(bool)
             assert s.value is False
 
     def test_setting_type_cast_list(self):
         """Test type casting to list."""
-        s = Setting(name='items', value='one, two, three')
+        s = Setting(name="items", value="one, two, three")
         s.type_cast(list)
-        assert s.value == ['one', 'two', 'three']
+        assert s.value == ["one", "two", "three"]
         assert s.vtype == list
 
     def test_setting_type_cast_invalid(self):
         """Test type cast with invalid value."""
-        s = Setting(name='num', value='not_a_number')
+        s = Setting(name="num", value="not_a_number")
         with pytest.raises(InvalidValue):
             s.type_cast(int)
 
     def test_setting_formatted(self):
         """Test formatted output."""
-        s = Setting(name='count', value=42, vtype=int)
+        s = Setting(name="count", value=42, vtype=int)
         result = s.formatted()
-        assert 'int-count' in result
-        assert '42' in result
+        assert "int-count" in result
+        assert "42" in result
 
     def test_setting_formatted_with_comment(self):
         """Test formatted output with comment."""
-        s = Setting(name='test', value='val', comment='A comment')
+        s = Setting(name="test", value="val", comment="A comment")
         result = s.formatted()
-        assert '## A comment' in result
+        assert "## A comment" in result
 
     def test_setting_comparison(self):
         """Test Setting comparison (sorting)."""
-        s1 = Setting(name='alpha')
-        s2 = Setting(name='beta')
+        s1 = Setting(name="alpha")
+        s2 = Setting(name="beta")
         assert s1 < s2
 
 
@@ -112,17 +110,17 @@ CamelCase = value
 lowercase = value
 UPPERCASE = value
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             parser = CaseSensitiveConfigParser()
             parser.read(path)
-            options = dict(parser.items('TEST'))
-            assert 'CamelCase' in options
-            assert 'lowercase' in options
-            assert 'UPPERCASE' in options
+            options = dict(parser.items("TEST"))
+            assert "CamelCase" in options
+            assert "lowercase" in options
+            assert "UPPERCASE" in options
         finally:
             os.unlink(path)
 
@@ -136,15 +134,15 @@ class TestSettingsParser:
 [GENERAL]
 name = test_name
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             parser = SettingsParser(path)
             result = parser.parse()
-            assert 'name' in result
-            assert result['name'].value == 'test_name'
+            assert "name" in result
+            assert result["name"].value == "test_name"
         finally:
             os.unlink(path)
 
@@ -157,17 +155,17 @@ float-rate = 3.14
 bool-enabled = true
 list-items = one, two, three
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             parser = SettingsParser(path)
             result = parser.parse()
-            assert result['count'].value == 42
-            assert result['rate'].value == pytest.approx(3.14)
-            assert result['enabled'].value is True
-            assert result['items'].value == ['one', 'two', 'three']
+            assert result["count"].value == 42
+            assert result["rate"].value == pytest.approx(3.14)
+            assert result["enabled"].value is True
+            assert result["items"].value == ["one", "two", "three"]
         finally:
             os.unlink(path)
 
@@ -177,15 +175,15 @@ list-items = one, two, three
 [GENERAL]
 name = test # This is a comment
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             parser = SettingsParser(path)
             result = parser.parse()
-            assert result['name'].value == 'test'
-            assert 'comment' in result['name'].comment.lower()
+            assert result["name"].value == "test"
+            assert "comment" in result["name"].comment.lower()
         finally:
             os.unlink(path)
 
@@ -198,23 +196,23 @@ name = test
 [OTHER]
 value = 42
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             parser = SettingsParser(path)
             result = parser.parse(keep_sections=True)
-            assert 'GENERAL' in result
-            assert 'OTHER' in result
-            assert 'name' in result['GENERAL']
-            assert 'value' in result['OTHER']
+            assert "GENERAL" in result
+            assert "OTHER" in result
+            assert "name" in result["GENERAL"]
+            assert "value" in result["OTHER"]
         finally:
             os.unlink(path)
 
     def test_parse_file_not_found(self):
         """Test parsing non-existent file."""
-        parser = SettingsParser('/nonexistent/file.cfg')
+        parser = SettingsParser("/nonexistent/file.cfg")
         with pytest.raises(IOError):
             parser.parse()
 
@@ -229,11 +227,11 @@ class TestSettingsManager:
 int-count = 42
 name = test
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             default_path = f.name
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write("")  # Empty user config
             user_path = f.name
 
@@ -241,8 +239,8 @@ name = test
             manager = SettingsManager(default_path, user_path, verbose=False)
             manager.collect_settings()
             d = manager.settings_to_dict()
-            assert d['count'] == 42
-            assert d['name'] == 'test'
+            assert d["count"] == 42
+            assert d["name"] == "test"
         finally:
             os.unlink(default_path)
             os.unlink(user_path)
@@ -257,11 +255,11 @@ int-count = 10
 [GENERAL]
 int-count = 99
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(default_cfg)
             default_path = f.name
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(user_cfg)
             user_path = f.name
 
@@ -269,7 +267,7 @@ int-count = 99
             manager = SettingsManager(default_path, user_path, verbose=False)
             manager.collect_settings()
             d = manager.settings_to_dict()
-            assert d['count'] == 99
+            assert d["count"] == 99
         finally:
             os.unlink(default_path)
             os.unlink(user_path)
@@ -278,6 +276,7 @@ int-count = 99
 # =============================================================================
 # SystemConfigFileParser Tests
 # =============================================================================
+
 
 class TestSystemConfigFileParser:
     """Tests for SystemConfigFileParser."""
@@ -290,16 +289,16 @@ name = my_system
 restrmask = :1-100@CA
 alignmask = auto
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             parser = SystemConfigFileParser()
             params = parser.parse(path)
-            assert params['name'] == 'my_system'
-            assert params['restrain_mask'] == ':1-100@CA'
-            assert params['align_mask'] == 'auto'
+            assert params["name"] == "my_system"
+            assert params["restrain_mask"] == ":1-100@CA"
+            assert params["align_mask"] == "auto"
         finally:
             os.unlink(path)
 
@@ -310,14 +309,14 @@ alignmask = auto
 name = system
 extrares = LIG, ION, ACE
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             parser = SystemConfigFileParser()
             params = parser.parse(path)
-            assert params['extra_residues'] == ['LIG', 'ION', 'ACE']
+            assert params["extra_residues"] == ["LIG", "ION", "ACE"]
         finally:
             os.unlink(path)
 
@@ -327,7 +326,7 @@ extrares = LIG, ION, ACE
 [OTHER]
 name = test
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
@@ -342,12 +341,13 @@ name = test
         """Test parsing non-existent file."""
         parser = SystemConfigFileParser()
         with pytest.raises(BadFile):
-            parser.parse('/nonexistent/file.cfg')
+            parser.parse("/nonexistent/file.cfg")
 
 
 # =============================================================================
 # MDSettingsConfigFileParser Tests
 # =============================================================================
+
 
 class TestMDSettingsConfigFileParser:
     """Tests for MDSettingsConfigFileParser."""
@@ -362,7 +362,7 @@ nanos = 10
 restr = HA
 temp = 300.0
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
@@ -371,9 +371,9 @@ temp = 300.0
             settings = parser.parse(path)
             # 2 solvents x 2 replicas = 4 settings
             assert len(settings) == 4
-            assert all(s['nanos'] == 10 for s in settings)
-            assert all(s['restr_mode'] == 'HA' for s in settings)
-            assert all(s['temp'] == 300.0 for s in settings)
+            assert all(s["nanos"] == 10 for s in settings)
+            assert all(s["restr_mode"] == "HA" for s in settings)
+            assert all(s["temp"] == 300.0 for s in settings)
         finally:
             os.unlink(path)
 
@@ -384,7 +384,7 @@ temp = 300.0
 solvents = ETA, WAT
 nrepl = 3, WAT:1
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
@@ -393,8 +393,8 @@ nrepl = 3, WAT:1
             settings = parser.parse(path)
             # ETA: 3 replicas, WAT: 1 replica = 4 total
             assert len(settings) == 4
-            eta_count = sum(1 for s in settings if s['solvent'] == 'ETA')
-            wat_count = sum(1 for s in settings if s['solvent'] == 'WAT')
+            eta_count = sum(1 for s in settings if s["solvent"] == "ETA")
+            wat_count = sum(1 for s in settings if s["solvent"] == "WAT")
             assert eta_count == 3
             assert wat_count == 1
         finally:
@@ -408,7 +408,7 @@ solvents = ETA
 nrepl = 2
 restr = HA, ETA/1/FREE
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
@@ -417,9 +417,9 @@ restr = HA, ETA/1/FREE
             settings = parser.parse(path)
             assert len(settings) == 2
             # First replica should be FREE
-            restr_modes = [s['restr_mode'] for s in settings]
-            assert 'FREE' in restr_modes
-            assert 'HA' in restr_modes
+            restr_modes = [s["restr_mode"] for s in settings]
+            assert "FREE" in restr_modes
+            assert "HA" in restr_modes
         finally:
             os.unlink(path)
 
@@ -432,17 +432,17 @@ restr = BB
 temp = 310.0
 force = 5.0
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             parser = MDSettingsConfigFileParser()
             settings = parser.parse_no_solvent(path)
-            assert settings['nanos'] == 20
-            assert settings['restr_mode'] == 'BB'
-            assert settings['temp'] == 310.0
-            assert settings['restr_force'] == 5.0
+            assert settings["nanos"] == 20
+            assert settings["restr_mode"] == "BB"
+            assert settings["temp"] == 310.0
+            assert settings["restr_force"] == 5.0
         finally:
             os.unlink(path)
 
@@ -452,7 +452,7 @@ force = 5.0
 [OTHER]
 name = test
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
@@ -469,7 +469,7 @@ name = test
 [MDSETTINGS]
 nrepl = 2
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
@@ -487,13 +487,13 @@ nrepl = 2
 solvents = INVALID
 nrepl = 1
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 
         try:
             # With validation enabled
-            parser = MDSettingsConfigFileParser(available_solvents=['ETA', 'WAT'])
+            parser = MDSettingsConfigFileParser(available_solvents=["ETA", "WAT"])
             with pytest.raises(BadSolvent):
                 parser.parse(path)
         finally:
@@ -512,7 +512,7 @@ solvents = WAT
 nrepl = 2
 nanos = 20
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
             f.write(cfg_content)
             path = f.name
 

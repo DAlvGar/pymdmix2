@@ -18,10 +18,11 @@ Examples
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import logging
+import shutil
 import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import parmed
 
@@ -31,8 +32,42 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
+class SolvationOptions:
+    """
+    High-level solvation options passed to :func:`solvate_structure`.
+
+    Attributes
+    ----------
+    box_buffer : float
+        Minimum distance (Å) between solute and box edge (default 12.0).
+    box_shape : str
+        Box geometry: ``"truncated_octahedron"`` (default), ``"octahedron"``,
+        or ``"box"``.
+    neutralize : bool
+        Add counter-ions to neutralise the system (default True).
+    ion_concentration : float
+        Additional NaCl concentration in mol/L (default 0.15).
+    cation : str
+        Cation residue name for LEaP (default ``"Na+"``).
+    anion : str
+        Anion residue name for LEaP (default ``"Cl-"``).
+    extra_forcefields : list[str]
+        Additional force-field files to source in LEaP.
+    """
+
+    box_buffer: float = 12.0
+    box_shape: str = "truncated_octahedron"
+    neutralize: bool = True
+    ion_concentration: float = 0.15
+    cation: str = "Na+"
+    anion: str = "Cl-"
+    extra_forcefields: list[str] = field(default_factory=list)
+
+
+@dataclass
 class SolvateResult:
     """Result of solvation."""
+
     topology: Path | None = None
     coordinates: Path | None = None
     n_solvent_residues: int = 0
@@ -42,10 +77,47 @@ class SolvateResult:
     success: bool = False
     error: str | None = None
 
+    def save_coordinates(self, path: str | Path) -> None:
+        """
+        Copy the coordinate file to *path*.
+
+        Parameters
+        ----------
+        path : str or Path
+            Destination file path.
+
+        Raises
+        ------
+        ValueError
+            If no coordinates were produced (solvation failed).
+        """
+        if self.coordinates is None:
+            raise ValueError("No coordinates available — solvation may have failed")
+        shutil.copy2(self.coordinates, Path(path))
+
+    def save_topology(self, path: str | Path) -> None:
+        """
+        Copy the topology file to *path*.
+
+        Parameters
+        ----------
+        path : str or Path
+            Destination file path.
+
+        Raises
+        ------
+        ValueError
+            If no topology was produced (solvation failed).
+        """
+        if self.topology is None:
+            raise ValueError("No topology available — solvation may have failed")
+        shutil.copy2(self.topology, Path(path))
+
 
 @dataclass
 class BoxConfig:
     """Solvation box configuration."""
+
     shape: str = "truncated_octahedron"  # or "box", "octahedron"
     buffer: float = 12.0  # Angstroms from solute to box edge
     closeness: float = 1.0  # Minimum distance between solute and solvent
@@ -63,6 +135,7 @@ class BoxConfig:
 @dataclass
 class IonConfig:
     """Ion addition configuration."""
+
     neutralize: bool = True
     add_ions: bool = True
     cation: str = "Na+"
@@ -141,21 +214,25 @@ def generate_leap_script(
     for ff in force_fields:
         lines.append(f"source {ff}")
 
-    lines.extend([
-        "",
-        "# Load solvent parameters",
-    ])
+    lines.extend(
+        [
+            "",
+            "# Load solvent parameters",
+        ]
+    )
 
     if solvent.off_file and solvent.off_file.exists():
         lines.append(f"loadoff {solvent.off_file}")
 
-    lines.extend([
-        "",
-        "# Load structure",
-        f"sys = loadpdb {pdb_path}",
-        "",
-        "# Solvate",
-    ])
+    lines.extend(
+        [
+            "",
+            "# Load structure",
+            f"sys = loadpdb {pdb_path}",
+            "",
+            "# Solvate",
+        ]
+    )
 
     # Determine solvent box name
     solvent_box = f"{solvent.name}BOX"
@@ -171,15 +248,17 @@ def generate_leap_script(
         lines.extend(extra_commands)
 
     # Save outputs
-    lines.extend([
-        "",
-        "# Check and save",
-        "check sys",
-        f"saveamberparm sys {output_prefix}.prmtop {output_prefix}.inpcrd",
-        f"savepdb sys {output_prefix}.pdb",
-        "",
-        "quit",
-    ])
+    lines.extend(
+        [
+            "",
+            "# Check and save",
+            "check sys",
+            f"saveamberparm sys {output_prefix}.prmtop {output_prefix}.inpcrd",
+            f"savepdb sys {output_prefix}.pdb",
+            "",
+            "quit",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -242,8 +321,9 @@ def run_leap(
 def solvate_structure(
     structure: parmed.Structure | Path,
     solvent: Solvent,
-    output_dir: Path,
+    output_dir: Path | None = None,
     output_prefix: str = "system",
+    options: SolvationOptions | None = None,
     box_config: BoxConfig | None = None,
     ion_config: IonConfig | None = None,
     leap_exe: str = "tleap",
@@ -273,7 +353,23 @@ def solvate_structure(
     SolvateResult
         Solvation result with file paths
     """
-    output_dir = Path(output_dir)
+    # Apply SolvationOptions to BoxConfig / IonConfig when provided
+    if options is not None:
+        if box_config is None:
+            box_config = BoxConfig(
+                shape=options.box_shape,
+                buffer=options.box_buffer,
+            )
+        if ion_config is None:
+            ion_config = IonConfig(
+                neutralize=options.neutralize,
+                add_ions=options.ion_concentration > 0,
+                cation=options.cation,
+                anion=options.anion,
+                concentration=options.ion_concentration,
+            )
+
+    output_dir = Path(output_dir) if output_dir is not None else Path.cwd()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     result = SolvateResult()

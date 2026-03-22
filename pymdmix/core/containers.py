@@ -8,6 +8,7 @@ Migrated from the original pyMDMix/containers.py.
 
 Note: The Probe class is now in pymdmix.core.solvent.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -39,6 +40,7 @@ class Atom:
     >>> atom.name
     'CA'
     """
+
     id: int
     name: str
     type: str
@@ -93,6 +95,7 @@ class Residue:
     >>> residue.charge
     0.0
     """
+
     name: str
     atoms: list[Atom]
     connectivity: tuple | list = field(default_factory=list)
@@ -210,26 +213,23 @@ class Residue:
         return self._atids.get(atom_id)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test
     atoms = [
-        Atom(id=1, name='C1', type='CT', element=6, charge=0.123),
-        Atom(id=2, name='O1', type='OH', element=8, charge=-0.456),
-        Atom(id=3, name='H1', type='HO', element=1, charge=0.333),
+        Atom(id=1, name="C1", type="CT", element=6, charge=0.123),
+        Atom(id=2, name="O1", type="OH", element=8, charge=-0.456),
+        Atom(id=3, name="H1", type="HO", element=1, charge=0.333),
     ]
 
-    xyz = np.array([
-        [0.0, 0.0, 0.0],
-        [1.5, 0.0, 0.0],
-        [2.0, 0.5, 0.0],
-    ])
-
-    residue = Residue(
-        name='ETA',
-        atoms=atoms,
-        connectivity=[(0, 1), (1, 2)],
-        xyz=xyz
+    xyz = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.5, 0.0, 0.0],
+            [2.0, 0.5, 0.0],
+        ]
     )
+
+    residue = Residue(name="ETA", atoms=atoms, connectivity=[(0, 1), (1, 2)], xyz=xyz)
 
     print(f"Residue: {residue}")
     print(f"Total charge: {residue.charge}")

@@ -1,15 +1,15 @@
 """Tests for ActionsManager."""
 
-import pytest
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from pymdmix.analysis.manager import (
-    ActionsManager,
     Action,
     ActionResult,
+    ActionsManager,
     Job,
-    JobResult,
 )
 
 
@@ -18,7 +18,7 @@ from pymdmix.analysis.manager import (
 class MockReplica:
     name: str
     path: Path = Path("/tmp/test")
-    
+
     def get_trajectory(self, **kwargs):
         return None
 
@@ -26,14 +26,14 @@ class MockReplica:
 # Mock action for testing
 class MockAction(Action):
     action_name = "mock_action"
-    
+
     def run(self, **kwargs) -> ActionResult:
         return {"status": "completed", "replica": self.replica.name}
 
 
 class FailingAction(Action):
     action_name = "failing_action"
-    
+
     def run(self, **kwargs) -> ActionResult:
         raise RuntimeError("Intentional failure")
 
@@ -41,10 +41,10 @@ class FailingAction(Action):
 class PostprocessAction(Action):
     action_name = "postprocess_action"
     postprocess_called = False
-    
+
     def run(self, **kwargs) -> ActionResult:
         return {"value": 42}
-    
+
     def postprocess(self, results: ActionResult, **kwargs) -> None:
         PostprocessAction.postprocess_called = True
 
@@ -112,7 +112,7 @@ class TestActionsManager:
         manager = ActionsManager()
         manager.add_replicas([MockReplica(name="r1"), MockReplica(name="r2")])
         manager.add_actions([MockAction, PostprocessAction])
-        
+
         jobs = manager.prepare_jobs()
         assert len(jobs) == 4  # 2 replicas × 2 actions
 
@@ -120,9 +120,9 @@ class TestActionsManager:
         manager = ActionsManager(ncpus=1)
         manager.add_replicas(MockReplica(name="test_replica"))
         manager.add_actions(MockAction)
-        
+
         results = manager.run()
-        
+
         assert "test_replica" in results
         assert "mock_action" in results["test_replica"]
         assert results["test_replica"]["mock_action"]["status"] == "completed"
@@ -136,9 +136,9 @@ class TestActionsManager:
         manager = ActionsManager(ncpus=1)
         manager.add_replicas(MockReplica(name="test"))
         manager.add_actions(FailingAction)
-        
+
         results = manager.run()
-        
+
         assert "test" in results
         assert "error" in results["test"]["failing_action"]
 
@@ -147,7 +147,7 @@ class TestActionsManager:
         manager.add_replicas(MockReplica(name="r1"))
         manager.add_actions(MockAction)
         manager.run()
-        
+
         results = manager.get_results()
         assert "r1" in results
 
@@ -156,16 +156,16 @@ class TestActionsManager:
         manager.add_replicas([MockReplica(name="r1"), MockReplica(name="r2")])
         manager.add_actions(MockAction)
         manager.run()
-        
+
         r1_results = manager.get_results(replica_name="r1")
         assert "mock_action" in r1_results
-        
+
     def test_get_results_by_action(self):
         manager = ActionsManager(ncpus=1)
         manager.add_replicas(MockReplica(name="r1"))
         manager.add_actions(MockAction)
         manager.run()
-        
+
         action_result = manager.get_results(replica_name="r1", action_name="mock_action")
         assert action_result["status"] == "completed"
 
@@ -174,7 +174,7 @@ class TestActionsManager:
         manager.add_replicas(MockReplica(name="test"))
         manager.add_actions(MockAction)
         manager.run()
-        
+
         summary = manager.summary()
         assert "test" in summary
         assert "mock_action" in summary
@@ -187,9 +187,9 @@ class TestActionsManagerParallel:
         manager = ActionsManager(ncpus=2, use_threads=True)
         manager.add_replicas([MockReplica(name=f"r{i}") for i in range(4)])
         manager.add_actions(MockAction)
-        
+
         results = manager.run()
-        
+
         assert len(results) == 4
         for name in ["r0", "r1", "r2", "r3"]:
             assert name in results

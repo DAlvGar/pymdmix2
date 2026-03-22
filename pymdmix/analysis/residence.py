@@ -44,6 +44,7 @@ from numpy.typing import NDArray
 
 try:
     from scipy.spatial import KDTree
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -84,6 +85,7 @@ class ResidenceResult:
     total_frames : int
         Total frames analyzed
     """
+
     hotspot_id: int
     hotspot_coord: tuple[float, float, float]
     frame_residues: dict[int, list[int]] = field(default_factory=dict)
@@ -98,18 +100,14 @@ class ResidenceResult:
 
     def top_residues(self, n: int = 10) -> list[tuple[int, int]]:
         """Get top N most frequent residues."""
-        sorted_residues = sorted(
-            self.residue_counts.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
+        sorted_residues = sorted(self.residue_counts.items(), key=lambda x: x[1], reverse=True)
         return sorted_residues[:n]
 
 
 class ResidenceWorker(Process):
     """
     Multiprocessing worker for parallel residence calculation.
-    
+
     Uses a shared Manager.dict for synchronized result storage.
     """
 
@@ -155,13 +153,23 @@ class ResidenceWorker(Process):
             for hotspot_idx, hotspot_coord in enumerate(self.hotspot_coords):
                 # Find atoms within tolerance
                 indices_nested = tree.query_ball_point(hotspot_coord, self.tolerance)
-                indices = _flatten_nested_list([indices_nested]) if isinstance(indices_nested, list) else [indices_nested]
+                indices = (
+                    _flatten_nested_list([indices_nested])
+                    if isinstance(indices_nested, list)
+                    else [indices_nested]
+                )
 
                 result_key = (hotspot_idx, frame_num)
 
                 if indices:
                     # Get unique residue IDs
-                    resids = np.unique([self.index_to_resid.get(idx, 0) for idx in indices if idx in self.index_to_resid])
+                    resids = np.unique(
+                        [
+                            self.index_to_resid.get(idx, 0)
+                            for idx in indices
+                            if idx in self.index_to_resid
+                        ]
+                    )
                     resnames = [self.resid_to_resname.get(resid, "") for resid in resids]
 
                     # Filter by tracked residue names if specified
@@ -224,21 +232,33 @@ class ResidenceAction(Action):
 
     def run(
         self,
-        trajectory: TrajectoryReader,
-        hotspot_coords: Sequence[tuple[float, float, float]],
+        trajectory: TrajectoryReader | None = None,
+        reference=None,
+        output_dir: Path | None = None,
+        hotspot_coords: Sequence[tuple[float, float, float]] | None = None,
         tolerance: float = 3.0,
         atom_indices: NDArray | None = None,
         residue_ids: NDArray | None = None,
         residue_names: NDArray | None = None,
         track_residues: list[str] | None = None,
         non_hydrogen_mask: NDArray[np.bool_] | None = None,
-        output_dir: Path | None = None,
         output_prefix: str = "",
-        reference=None,
         n_workers: int = 1,
         **kwargs,
     ) -> ActionResult:
         """Execute residence analysis."""
+
+        if trajectory is None:
+            return ActionResult(
+                success=False,
+                error="trajectory is required for ResidenceAction.run()",
+            )
+
+        if hotspot_coords is None:
+            return ActionResult(
+                success=False,
+                error="hotspot_coords must be provided to ResidenceAction.run()",
+            )
 
         if not HAS_SCIPY:
             return ActionResult(
@@ -258,12 +278,16 @@ class ResidenceAction(Action):
         if track_residues:
             self.log.info(f"Tracking residue types: {track_residues}")
         else:
-            self.log.warning("No track_residues specified. Will track ALL residues including protein!")
+            self.log.warning(
+                "No track_residues specified. Will track ALL residues including protein!"
+            )
 
         # Build residue mappings
         if non_hydrogen_mask is None:
             # Default: include all atoms
-            non_hydrogen_mask = np.ones(residue_ids.shape[0] if residue_ids is not None else 0, dtype=bool)
+            non_hydrogen_mask = np.ones(
+                residue_ids.shape[0] if residue_ids is not None else 0, dtype=bool
+            )
 
         # Build index to residue ID mapping (for masked indices)
         if residue_ids is not None:
@@ -277,24 +301,33 @@ class ResidenceAction(Action):
             masked_resids = residue_ids[non_hydrogen_mask].astype(int)
             masked_resnames = residue_names[non_hydrogen_mask]
             resid_to_resname = dict(zip(masked_resids, masked_resnames))
-            resid_to_resname[0] = 'NO_RESIDENCE'  # Special marker for unoccupied
+            resid_to_resname[0] = "NO_RESIDENCE"  # Special marker for unoccupied
         else:
-            resid_to_resname = {0: 'NO_RESIDENCE'}
+            resid_to_resname = {0: "NO_RESIDENCE"}
 
         # Run analysis
         if n_workers > 1:
             self.log.info(f"Using parallel processing with {n_workers} workers")
             frame_results, n_frames = self._run_parallel(
-                trajectory, hotspot_coords, tolerance,
-                non_hydrogen_mask, index_to_resid, resid_to_resname,
-                track_residues, n_workers
+                trajectory,
+                hotspot_coords,
+                tolerance,
+                non_hydrogen_mask,
+                index_to_resid,
+                resid_to_resname,
+                track_residues,
+                n_workers,
             )
         else:
             self.log.info("Using sequential processing")
             frame_results, n_frames = self._run_sequential(
-                trajectory, hotspot_coords, tolerance,
-                non_hydrogen_mask, index_to_resid, resid_to_resname,
-                track_residues
+                trajectory,
+                hotspot_coords,
+                tolerance,
+                non_hydrogen_mask,
+                index_to_resid,
+                resid_to_resname,
+                track_residues,
             )
 
         self.log.info(f"Processed {n_frames} frames")
@@ -321,8 +354,9 @@ class ResidenceAction(Action):
             # Update counts
             for resid in resids:
                 if resid != 0:  # Don't count "unoccupied" marker
-                    results[hotspot_idx].residue_counts[resid] = \
+                    results[hotspot_idx].residue_counts[resid] = (
                         results[hotspot_idx].residue_counts.get(resid, 0) + 1
+                    )
 
         # Save results
         output_files = []
@@ -341,36 +375,38 @@ class ResidenceAction(Action):
             elif isinstance(obj, dict):
                 # Convert both keys and values
                 return {
-                    int(k) if isinstance(k, np.integer) else k: _to_serializable(v) 
+                    int(k) if isinstance(k, np.integer) else k: _to_serializable(v)
                     for k, v in obj.items()
                 }
             elif isinstance(obj, (list, tuple)):
                 return [_to_serializable(v) for v in obj]
             return obj
 
-        json_data = _to_serializable({
-            "n_frames": n_frames,
-            "tolerance": tolerance,
-            "n_hotspots": n_hotspots,
-            "track_residues": track_residues,
-            "hotspots": [
-                {
-                    "id": r.hotspot_id,
-                    "coord": r.hotspot_coord,
-                    "occupancy": r.occupancy,
-                    "top_residues": r.top_residues(10),
-                    "residue_counts": r.residue_counts,
-                }
-                for r in results
-            ],
-        })
-        with open(json_path, 'w') as f:
+        json_data = _to_serializable(
+            {
+                "n_frames": n_frames,
+                "tolerance": tolerance,
+                "n_hotspots": n_hotspots,
+                "track_residues": track_residues,
+                "hotspots": [
+                    {
+                        "id": r.hotspot_id,
+                        "coord": r.hotspot_coord,
+                        "occupancy": r.occupancy,
+                        "top_residues": r.top_residues(10),
+                        "residue_counts": r.residue_counts,
+                    }
+                    for r in results
+                ],
+            }
+        )
+        with open(json_path, "w") as f:
             json.dump(json_data, f, indent=2)
         output_files.append(json_path)
 
         # Summary text (similar to old format)
         summary_path = output_dir / f"{output_prefix}residence_summary.txt"
-        with open(summary_path, 'w') as f:
+        with open(summary_path, "w") as f:
             f.write("Residence Analysis Summary\n")
             f.write("==========================\n\n")
             f.write(f"Total frames: {n_frames}\n")
@@ -409,7 +445,7 @@ class ResidenceAction(Action):
 
         # ASCII data file (old format compatibility)
         data_path = output_dir / f"{output_prefix}residence_data.txt"
-        with open(data_path, 'w') as f:
+        with open(data_path, "w") as f:
             f.write(f"# Residence results for {n_hotspots} hotspots\n")
             if track_residues:
                 f.write(f"# Tracked residues: {track_residues}\n")
@@ -418,12 +454,14 @@ class ResidenceAction(Action):
                 f.write(f"# {resname} = {','.join(map(str, sorted(resids)))}\n")
             f.write("# DATA (frame_num, hotspot_0_resids, hotspot_1_resids, ...)\n")
 
-            for frame_num in sorted(set(fn for _, fn in frame_results.keys() if isinstance(_, int))):
+            for frame_num in sorted(
+                set(fn for _, fn in frame_results.keys() if isinstance(_, int))
+            ):
                 row = [str(frame_num)]
                 for hotspot_idx in range(n_hotspots):
                     resids = frame_results.get((hotspot_idx, frame_num), [0])
-                    row.append(','.join(map(str, resids)))
-                f.write('\t'.join(row) + '\n')
+                    row.append(",".join(map(str, resids)))
+                f.write("\t".join(row) + "\n")
 
         output_files.append(data_path)
 
@@ -469,19 +507,26 @@ class ResidenceAction(Action):
             for hotspot_idx, hotspot_coord in enumerate(hotspot_coords):
                 # Find atoms within tolerance
                 indices_nested = tree.query_ball_point(hotspot_coord, tolerance)
-                indices = _flatten_nested_list([indices_nested]) if isinstance(indices_nested, list) else [indices_nested]
+                indices = (
+                    _flatten_nested_list([indices_nested])
+                    if isinstance(indices_nested, list)
+                    else [indices_nested]
+                )
 
                 result_key = (hotspot_idx, n_frames)
 
                 if indices:
                     # Get unique residue IDs
-                    resids = list(set(index_to_resid.get(idx, 0) for idx in indices if idx in index_to_resid))
+                    resids = list(
+                        set(index_to_resid.get(idx, 0) for idx in indices if idx in index_to_resid)
+                    )
                     resnames = [resid_to_resname.get(resid, "") for resid in resids]
 
                     # Filter by tracked residue names
                     if track_residues:
                         filtered_resids = [
-                            resid for resid, resname in zip(resids, resnames)
+                            resid
+                            for resid, resname in zip(resids, resnames)
                             if resname in track_residues
                         ]
                         resids = filtered_resids if filtered_resids else [0]
@@ -550,7 +595,7 @@ class ResidenceAction(Action):
         if not HAS_SCIPY:
             errors.append("scipy is required for residence analysis")
 
-        hotspot_coords = kwargs.get('hotspot_coords')
+        hotspot_coords = kwargs.get("hotspot_coords")
         if not hotspot_coords:
             errors.append("hotspot_coords is required")
 

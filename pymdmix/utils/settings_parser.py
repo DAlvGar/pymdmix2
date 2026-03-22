@@ -8,6 +8,7 @@ Used for project configuration, replica configuration, and general settings.
 
 Migrated from the original pyMDMix/SettingsParser.py.
 """
+
 from __future__ import annotations
 
 import configparser
@@ -26,49 +27,59 @@ log = logging.getLogger(__name__)
 # Exceptions
 # =============================================================================
 
+
 class SettingsError(Exception):
     """Base exception for settings parsing."""
+
     pass
 
 
 class InvalidType(SettingsError):
     """Raised when a type conversion fails."""
+
     pass
 
 
 class InvalidValue(SettingsError):
     """Raised when a value is invalid."""
+
     pass
 
 
 class InvalidFile(SettingsError):
     """Raised when a settings file is invalid."""
+
     pass
 
 
 class SettingsWarning(SettingsError):
     """Non-fatal settings issue."""
+
     pass
 
 
 class InvalidPath(SettingsWarning):
     """Path validation warning."""
+
     pass
 
 
 class InvalidBinary(SettingsWarning):
     """Binary validation warning."""
+
     pass
 
 
 class WriteCfgError(SettingsError):
     """Error writing configuration file."""
+
     pass
 
 
 # =============================================================================
 # Case-Sensitive ConfigParser
 # =============================================================================
+
 
 class CaseSensitiveConfigParser(configparser.ConfigParser):
     """ConfigParser that preserves option name case."""
@@ -80,6 +91,7 @@ class CaseSensitiveConfigParser(configparser.ConfigParser):
 # =============================================================================
 # Setting Container
 # =============================================================================
+
 
 @dataclass
 class Setting:
@@ -101,17 +113,18 @@ class Setting:
     section : str
         Section this parameter belongs to.
     """
-    # Section constants
-    GENERAL: str = field(default='GENERAL', repr=False, init=False)
-    BIN: str = field(default='BINARIES', repr=False, init=False)
-    PATH: str = field(default='PATHS', repr=False, init=False)
 
-    name: str = ''
+    # Section constants
+    GENERAL: str = field(default="GENERAL", repr=False, init=False)
+    BIN: str = field(default="BINARIES", repr=False, init=False)
+    PATH: str = field(default="PATHS", repr=False, init=False)
+
+    name: str = ""
     value: Any = None
     vtype: type = str
-    comment: str = ''
+    comment: str = ""
     error: str | None = None
-    section: str = 'GENERAL'
+    section: str = "GENERAL"
 
     def type_cast(self, vtype: type) -> None:
         """
@@ -130,10 +143,10 @@ class Setting:
         try:
             if self.value is not None:
                 if vtype is list and isinstance(self.value, str):
-                    self.value = [s.strip() for s in self.value.split(',')]
+                    self.value = [s.strip() for s in self.value.split(",")]
                 elif vtype is bool and isinstance(self.value, str):
                     # Handle bool specially
-                    self.value = self.value.lower() in ('true', 'yes', '1', 'on')
+                    self.value = self.value.lower() in ("true", "yes", "1", "on")
                 else:
                     self.value = vtype(self.value)
             self.vtype = vtype
@@ -151,27 +164,27 @@ class Setting:
         str
             Formatted parameter line.
         """
-        comment = ''
-        error = ''
+        comment = ""
+        error = ""
         name = self.name
-        value = self.value if self.value is not None else ''
+        value = self.value if self.value is not None else ""
 
         # Prefix name with type if not str
         if self.vtype is not str:
             name = f"{self.vtype.__name__}-{name}"
             if self.vtype is list and isinstance(value, list):
-                value = ','.join(str(v) for v in value)
+                value = ",".join(str(v) for v in value)
 
         if self.comment:
-            comment = f'\t## {self.comment}'
+            comment = f"\t## {self.comment}"
 
         if self.error:
-            error = f'\t#! {self.error} !'
+            error = f"\t#! {self.error} !"
 
-        return f'{name} = {value}{comment}{error}'
+        return f"{name} = {value}{comment}{error}"
 
     def __repr__(self) -> str:
-        error = '(!)' if self.error else ''
+        error = "(!)" if self.error else ""
         return f"{error}{self.name} = {self.vtype.__name__}({self.value})"
 
     def __lt__(self, other: Setting) -> bool:
@@ -181,6 +194,7 @@ class Setting:
 # =============================================================================
 # Settings Parser
 # =============================================================================
+
 
 class SettingsParser:
     """
@@ -206,15 +220,11 @@ class SettingsParser:
     """
 
     def __init__(self, ini_file: str | Path):
-        self.log = logging.getLogger('SettingsParser')
+        self.log = logging.getLogger("SettingsParser")
         self.f_ini = absfile(ini_file)
         self.result: dict[str, Setting | dict[str, Setting]] = {}
 
-    def _extract_type(
-        self,
-        option: str,
-        default: type = str
-    ) -> tuple[type, str]:
+    def _extract_type(self, option: str, default: type = str) -> tuple[type, str]:
         """
         Extract type prefix from option name.
 
@@ -238,18 +248,18 @@ class SettingsParser:
         t = default
         o = option
 
-        if '-' in option:
-            parts = option.split('-', 1)
+        if "-" in option:
+            parts = option.split("-", 1)
             type_str = parts[0]
             o = parts[1]
 
             # Map string to type
             type_map = {
-                'str': str,
-                'int': int,
-                'float': float,
-                'bool': bool,
-                'list': list,
+                "str": str,
+                "int": int,
+                "float": float,
+                "bool": bool,
+                "list": list,
             }
 
             if type_str in type_map:
@@ -260,12 +270,7 @@ class SettingsParser:
 
         return t, o
 
-    def _process_option(
-        self,
-        option: str,
-        value: str,
-        section: str = 'GENERAL'
-    ) -> Setting:
+    def _process_option(self, option: str, value: str, section: str = "GENERAL") -> Setting:
         """
         Process a single option.
 
@@ -287,7 +292,7 @@ class SettingsParser:
 
         try:
             # Split off comments
-            parts = value.split('#', 1)
+            parts = value.split("#", 1)
             s.value = parts[0].strip() or None
 
             if len(parts) > 1:
@@ -298,14 +303,14 @@ class SettingsParser:
             s.type_cast(vtype)
 
             # Validate paths
-            if section == 'PATHS' and s.value:
+            if section == "PATHS" and s.value:
                 try:
                     s.value = valid_path(s.value)
                 except Exception as e:
                     s.error = str(e)
 
             # Validate binaries
-            if section == 'BINARIES' and s.value:
+            if section == "BINARIES" and s.value:
                 try:
                     s.value = valid_binary(s.value)
                 except Exception as e:
@@ -317,10 +322,7 @@ class SettingsParser:
         return s
 
     def _process_section(
-        self,
-        items: list[tuple[str, str]],
-        section: str = 'GENERAL',
-        verbose: bool = False
+        self, items: list[tuple[str, str]], section: str = "GENERAL", verbose: bool = False
     ) -> dict[str, Setting]:
         """
         Process all items in a section.
@@ -375,7 +377,7 @@ class SettingsParser:
             c = CaseSensitiveConfigParser()
 
             if not self.f_ini.exists():
-                raise OSError(f'Settings file not found: {self.f_ini}')
+                raise OSError(f"Settings file not found: {self.f_ini}")
 
             c.read(self.f_ini)
 
@@ -388,21 +390,19 @@ class SettingsParser:
                     self.result.update(section_result)
 
         except configparser.Error as e:
-            raise InvalidFile(
-                f'Error parsing settings file {self.f_ini}: {e}'
-            ) from e
+            raise InvalidFile(f"Error parsing settings file {self.f_ini}: {e}") from e
 
         return self.result
 
     def __repr__(self) -> str:
-        errors = sum(1 for s in self.result.values()
-                     if isinstance(s, Setting) and s.error)
+        errors = sum(1 for s in self.result.values() if isinstance(s, Setting) and s.error)
         return f"SettingsParser({self.f_ini}, entries={len(self.result)}, errors={errors})"
 
 
 # =============================================================================
 # Settings Manager
 # =============================================================================
+
 
 class SettingsManager:
     """
@@ -431,7 +431,7 @@ class SettingsManager:
     >>> settings = manager.settings_to_dict()
     """
 
-    USER_HEADER = '''
+    USER_HEADER = """
 ##     pyMDMix User Configuration File
 ##
 ##     Parameters here override defaults in %(f_default)s.
@@ -440,16 +440,16 @@ class SettingsManager:
 ##     Example: int-nreplicas = 3
 ##              list-solvents = ETA, WAT, MAM
 
-'''
+"""
 
     def __init__(
         self,
         f_default: str | Path,
         f_user: str | Path,
         create_missing: bool = False,
-        verbose: bool = True
+        verbose: bool = True,
     ):
-        self.log = logging.getLogger('SettingsManager')
+        self.log = logging.getLogger("SettingsManager")
         self.verbose = verbose
         self.f_default = Path(f_default)
         self.f_user = absfile(f_user)
@@ -459,9 +459,7 @@ class SettingsManager:
         self.settings: dict[str, Setting] = {}
 
     def _update(
-        self,
-        cfg_default: dict[str, Setting],
-        cfg_user: dict[str, Setting]
+        self, cfg_default: dict[str, Setting], cfg_user: dict[str, Setting]
     ) -> dict[str, Setting]:
         """
         Override defaults with valid user settings.
@@ -511,9 +509,7 @@ class SettingsManager:
                     c_user = p_user.parse()
                 except OSError:
                     if self.verbose:
-                        self.log.warning(
-                            f'User settings not found: {self.f_user}'
-                        )
+                        self.log.warning(f"User settings not found: {self.f_user}")
 
             # Merge
             self.settings = self._update(c_default, c_user)
@@ -538,34 +534,34 @@ class SettingsManager:
             self.f_user.parent.mkdir(parents=True, exist_ok=True)
 
             # Group by section
-            sections = ['GENERAL', 'PATHS', 'BINARIES']
+            sections = ["GENERAL", "PATHS", "BINARIES"]
             by_section: dict[str, list[Setting]] = {s: [] for s in sections}
 
             for s in self.settings.values():
-                section = s.section if s.section in sections else 'GENERAL'
+                section = s.section if s.section in sections else "GENERAL"
                 by_section[section].append(s)
 
             for section in by_section:
                 by_section[section].sort()
 
             # Write file
-            with open(self.f_user, 'w') as f:
-                f.write(self.USER_HEADER % {'f_default': self.f_default})
+            with open(self.f_user, "w") as f:
+                f.write(self.USER_HEADER % {"f_default": self.f_default})
 
                 for section in sections:
                     settings = by_section[section]
                     if not settings:
                         continue
 
-                    f.write(f'[{section}]\n\n')
+                    f.write(f"[{section}]\n\n")
 
                     for param in settings:
                         if errors_only and not param.error:
-                            f.write(f'## {param.formatted()}\n')
+                            f.write(f"## {param.formatted()}\n")
                         else:
-                            f.write(f'{param.formatted()}\n')
+                            f.write(f"{param.formatted()}\n")
 
-                    f.write('\n')
+                    f.write("\n")
 
         except OSError as e:
             raise WriteCfgError(str(e)) from e
@@ -581,11 +577,7 @@ class SettingsManager:
         """
         return {s.name: s.value for s in self.settings.values()}
 
-    def update_namespace(
-        self,
-        ns: dict[str, Any],
-        keep_defined: bool = True
-    ) -> None:
+    def update_namespace(self, ns: dict[str, Any], keep_defined: bool = True) -> None:
         """
         Insert settings into a namespace (like module locals()).
 
@@ -600,7 +592,7 @@ class SettingsManager:
 
         if self.user_missing and self.create_missing:
             if self.verbose:
-                self.log.warning(f'Creating user config: {self.f_user}')
+                self.log.warning(f"Creating user config: {self.f_user}")
             self.write_user_settings(errors_only=True)
 
         d = self.settings_to_dict()
@@ -613,7 +605,7 @@ class SettingsManager:
             ns.update(d)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Simple test
     import tempfile
 
@@ -629,7 +621,7 @@ name = test_name  # A comment
 [PATHS]
 data_dir = /tmp
 """
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
         f.write(cfg_content)
         cfg_path = f.name
 

@@ -19,11 +19,13 @@ Examples
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Protocol, runtime_checkable
-import logging
+from typing import Protocol, runtime_checkable
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -32,6 +34,7 @@ log = logging.getLogger(__name__)
 # Check for optional dependencies
 try:
     import MDAnalysis as mda
+
     HAS_MDANALYSIS = True
 except ImportError:
     HAS_MDANALYSIS = False
@@ -39,6 +42,7 @@ except ImportError:
 
 try:
     import netCDF4
+
     HAS_NETCDF4 = True
 except ImportError:
     HAS_NETCDF4 = False
@@ -59,6 +63,7 @@ class Frame:
     box : NDArray[np.float64] | None
         Box dimensions [a, b, c, alpha, beta, gamma]
     """
+
     coordinates: NDArray[np.float64]
     time: float | None = None
     box: NDArray[np.float64] | None = None
@@ -156,15 +161,11 @@ class MDAnalysisReader(BaseTrajectoryReader):
     def __init__(self, topology: str | Path, trajectory: str | Path):
         if not HAS_MDANALYSIS:
             raise ImportError(
-                "MDAnalysis is required for this reader. "
-                "Install with: pip install MDAnalysis"
+                "MDAnalysis is required for this reader. Install with: pip install MDAnalysis"
             )
 
         super().__init__(topology, trajectory)
-        self._universe = mda.Universe(
-            str(self.topology_path),
-            str(self.trajectory_path)
-        )
+        self._universe = mda.Universe(str(self.topology_path), str(self.trajectory_path))
         log.debug(f"Opened trajectory with MDAnalysis: {self.trajectory_path}")
 
     @property
@@ -179,7 +180,7 @@ class MDAnalysisReader(BaseTrajectoryReader):
         for ts in self._universe.trajectory:
             yield Frame(
                 coordinates=ts.positions.copy(),
-                time=ts.time if hasattr(ts, 'time') else None,
+                time=ts.time if hasattr(ts, "time") else None,
                 box=ts.dimensions.copy() if ts.dimensions is not None else None,
             )
 
@@ -227,15 +228,14 @@ class AmberNetCDFReader(BaseTrajectoryReader):
     def __init__(self, topology: str | Path, trajectory: str | Path):
         if not HAS_NETCDF4:
             raise ImportError(
-                "netCDF4 is required for this reader. "
-                "Install with: pip install netCDF4"
+                "netCDF4 is required for this reader. Install with: pip install netCDF4"
             )
 
         super().__init__(topology, trajectory)
 
-        self._nc = netCDF4.Dataset(str(self.trajectory_path), 'r')
-        self._n_frames = self._nc.dimensions['frame'].size
-        self._n_atoms = self._nc.dimensions['atom'].size
+        self._nc = netCDF4.Dataset(str(self.trajectory_path), "r")
+        self._n_frames = self._nc.dimensions["frame"].size
+        self._n_atoms = self._nc.dimensions["atom"].size
 
         log.debug(f"Opened Amber NetCDF trajectory: {self.trajectory_path}")
 
@@ -248,12 +248,12 @@ class AmberNetCDFReader(BaseTrajectoryReader):
         return self._n_atoms
 
     def __iter__(self) -> Iterator[Frame]:
-        coords_var = self._nc.variables['coordinates']
+        coords_var = self._nc.variables["coordinates"]
 
         # Check for optional variables
-        time_var = self._nc.variables.get('time')
-        box_var = self._nc.variables.get('cell_lengths')
-        angles_var = self._nc.variables.get('cell_angles')
+        time_var = self._nc.variables.get("time")
+        box_var = self._nc.variables.get("cell_lengths")
+        angles_var = self._nc.variables.get("cell_angles")
 
         for i in range(self._n_frames):
             coords = coords_var[i, :, :].astype(np.float64)
@@ -270,7 +270,7 @@ class AmberNetCDFReader(BaseTrajectoryReader):
 
     def __del__(self):
         """Close NetCDF file on cleanup."""
-        if hasattr(self, '_nc') and self._nc is not None:
+        if hasattr(self, "_nc") and self._nc is not None:
             try:
                 self._nc.close()
             except Exception:
@@ -366,7 +366,7 @@ def open_trajectory(
         # Prefer MDAnalysis if available
         if HAS_MDANALYSIS:
             backend = "mdanalysis"
-        elif traj_suffix in ('.nc', '.ncdf') and HAS_NETCDF4:
+        elif traj_suffix in (".nc", ".ncdf") and HAS_NETCDF4:
             backend = "amber"
         else:
             raise ImportError(
@@ -377,10 +377,8 @@ def open_trajectory(
     if backend == "mdanalysis":
         return MDAnalysisReader(topology, trajectory)
     elif backend == "amber":
-        if traj_suffix not in ('.nc', '.ncdf'):
-            raise ValueError(
-                f"Amber backend only supports NetCDF (.nc), got {traj_suffix}"
-            )
+        if traj_suffix not in (".nc", ".ncdf"):
+            raise ValueError(f"Amber backend only supports NetCDF (.nc), got {traj_suffix}")
         return AmberNetCDFReader(topology, trajectory)
     else:
         raise ValueError(f"Unknown backend: {backend}")

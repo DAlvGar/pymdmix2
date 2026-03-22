@@ -19,10 +19,10 @@
 | `GridsManager.py` | `core/grid.py` | ✅ (merged) |
 | `HotSpotsManager.py` | `analysis/hotspots.py` | ✅ |
 | `MDSettings.py` | `project/settings.py` | ✅ |
-| `NAMD.py` | `engines/namd.py` | ✅ |
+| `NAMD.py` | `engines/namd.py` | ✅ (`NAMDEngine` + `NAMDWriter` + `NAMDChecker`) |
 | `NamdDCDParser.py` | `io/dcd_parser.py` | ✅ |
 | `OFFManager.py` | `io/off_manager.py` | ✅ |
-| `OpenMM.py` | `engines/openmm.py` | ✅ |
+| `OpenMM.py` | `engines/openmm.py` | ✅ (`OpenMMEngine` + `OpenMMWriter` + `OpenMMChecker`) |
 | `Parsers.py` | `io/parsers.py` | ✅ |
 | `PDB.py` | `core/structure.py` | ✅ (replaced by parmed) |
 | `Plotter.py` | `io/plotting.py` | ✅ |
@@ -54,7 +54,7 @@
 ### Structure Handling (Biskit replacement)
 - [x] Load PDB files (parmed)
 - [x] Protein/water/nucleic masks
-- [x] Backbone/heavy atom masks  
+- [x] Backbone/heavy atom masks
 - [x] Hydrogen mask
 - [x] Atom selection
 - [x] Chain operations
@@ -94,9 +94,15 @@ Tested on 2026-03-22 with `pep.pdb` (8-residue peptide):
 
 ## Test Count
 
-- **627 tests passing**
-- 4 skipped (optional dependencies)
-- 0 failures
+- **621 tests passing**
+- 8 skipped (optional dependencies)
+- 2 pre-existing failures (unrelated to port work)
+
+### Known Pre-existing Failures
+| Test | Reason |
+|------|--------|
+| `test_gromacs.py::test_create_index_groups` | Asserts `"Non-Protein"` but GROMACS outputs `"non-Protein"` (capitalisation) |
+| `test_project.py::TestConfig::test_config_validation` | Config validation not yet implemented; returns empty error list |
 
 ## Dependencies
 

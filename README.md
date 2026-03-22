@@ -4,7 +4,7 @@ A modern Python toolkit for molecular dynamics simulations with organic solvent 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-627%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-621%20passed-brightgreen.svg)]()
 
 ## Overview
 
@@ -24,7 +24,7 @@ pyMDMix2 enables drug discovery researchers to:
 - Support for multiple MD engines (Amber, OpenMM, NAMD, GROMACS)
 - JSON/TOML-based configuration for easy customization
 - CLI and Python API interfaces
-- Comprehensive test suite (627 tests)
+- Comprehensive test suite (621+ tests)
 
 ## Installation
 
@@ -33,14 +33,41 @@ pyMDMix2 enables drug discovery researchers to:
 git clone https://github.com/DAlvGar/pymdmix2.git
 cd pymdmix2
 
-# Install
-pip install -e .
+# Install with uv (recommended)
+uv sync --all-extras
 
-# With all optional dependencies
-pip install -e ".[full,dev]"
+# Activate the managed venv (optional — uv run works without it)
+source .venv/bin/activate
 ```
 
 **Requirements:** Python 3.10+, AmberTools (for solvation)
+
+## Development Setup
+
+```bash
+# Sync all dev + optional deps
+uv sync --all-extras
+
+# Install pre-commit hooks (runs on every git commit)
+uv run pre-commit install
+
+# Run hooks manually across all files
+uv run pre-commit run --all-files
+
+# Run tests
+uv run pytest tests/
+
+# Lint / format
+uv run ruff check pymdmix
+uv run ruff format pymdmix
+
+# Type-check
+uv run mypy pymdmix
+
+# Add a dependency
+uv add <package>           # runtime
+uv add --dev <package>     # dev-only
+```
 
 ## Quick Start: Creating a Project
 
@@ -83,13 +110,13 @@ for i in range(1, 3):  # 2 replicates
         path=Path(f"replicas/ETA_{i}"),
         settings=settings,
     )
-    
+
     # Create folder structure with topology/coordinates
     replica.create_folder(system=solvated)
-    
+
     # Generate Amber input files (min, eq, prod)
     replica.create_md_input()
-    
+
     replicas.append(replica)
     print(f"Created: {replica.path}")
 

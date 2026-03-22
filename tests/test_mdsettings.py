@@ -1,8 +1,6 @@
 """Tests for MDSettings class."""
 
 import pytest
-import tempfile
-from pathlib import Path
 
 from pymdmix.project.settings import MDSettings, load_settings
 

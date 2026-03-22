@@ -31,7 +31,7 @@ from typing import Any, TypeVar
 log = logging.getLogger(__name__)
 
 # Type variable for action classes
-T = TypeVar('T', bound='Action')
+T = TypeVar("T", bound="Action")
 
 
 @dataclass
@@ -52,6 +52,7 @@ class ActionResult:
     elapsed_time : float
         Time taken in seconds
     """
+
     success: bool
     output_files: list[Path] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -192,11 +193,13 @@ def register_action(name: str) -> Callable[[type[T]], type[T]]:
     ... class MyAction(Action):
     ...     pass
     """
+
     def decorator(cls: type[T]) -> type[T]:
         cls.name = name
         _ACTION_REGISTRY[name] = cls
         log.debug(f"Registered action: {name}")
         return cls
+
     return decorator
 
 

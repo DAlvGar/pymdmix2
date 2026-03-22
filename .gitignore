@@ -10,3 +10,5 @@ build/
 projects/
 .env
 *.log
+.mypy_cache/
+.coverage

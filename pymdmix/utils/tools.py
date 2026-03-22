@@ -6,6 +6,7 @@ Provides path utilities, mask parsing, logging, and other helper functions.
 
 Migrated from the original pyMDMix/tools.py and Biskit.tools.
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,24 +22,29 @@ from pathlib import Path
 # Exceptions
 # =============================================================================
 
+
 class ToolsError(Exception):
     """Base exception for tools module."""
+
     pass
 
 
 class InvalidPath(ToolsError):
     """Raised when a path is invalid or doesn't exist."""
+
     pass
 
 
 class InvalidBinary(ToolsError):
     """Raised when a binary path is invalid."""
+
     pass
 
 
 # =============================================================================
 # Path Utilities
 # =============================================================================
+
 
 def project_root(file: str | None = None) -> Path:
     """
@@ -62,13 +68,14 @@ def project_root(file: str | None = None) -> Path:
     PosixPath('/path/to/pymdmix/data/solvents')
     """
     import pymdmix
+
     root = Path(pymdmix.__file__).parent.resolve()
     if file:
         return root / file
     return root
 
 
-def data_root(subfolder: str = '') -> Path:
+def data_root(subfolder: str = "") -> Path:
     """
     Get the data directory of the pymdmix package.
 
@@ -89,7 +96,7 @@ def data_root(subfolder: str = '') -> Path:
     >>> data_root('solvents')
     PosixPath('/path/to/pymdmix/data/solvents')
     """
-    return project_root('data') / subfolder if subfolder else project_root('data')
+    return project_root("data") / subfolder if subfolder else project_root("data")
 
 
 def test_root(*subpath: str) -> Path:
@@ -113,7 +120,7 @@ def test_root(*subpath: str) -> Path:
     >>> test_root('pep', 'system.pdb')
     PosixPath('/path/to/pymdmix/data/test/pep/system.pdb')
     """
-    base = data_root('test')
+    base = data_root("test")
     if subpath:
         return base.joinpath(*subpath)
     return base
@@ -133,7 +140,7 @@ def templates_root(file: str | None = None) -> Path:
     Path
         Absolute path to templates directory.
     """
-    base = data_root('templates')
+    base = data_root("templates")
     if file:
         return base / file
     return base
@@ -153,7 +160,7 @@ def solvents_root(file: str | None = None) -> Path:
     Path
         Absolute path to solvents directory.
     """
-    base = data_root('solvents')
+    base = data_root("solvents")
     if file:
         return base / file
     return base
@@ -278,14 +285,14 @@ def file_permissions(path: str | Path) -> dict[str, bool]:
     """
     path = Path(path)
     return {
-        'EXISTS': path.exists(),
-        'READ': os.access(path, os.R_OK),
-        'WRITE': os.access(path, os.W_OK),
-        'EXECUTE': os.access(path, os.X_OK),
+        "EXISTS": path.exists(),
+        "READ": os.access(path, os.R_OK),
+        "WRITE": os.access(path, os.W_OK),
+        "EXECUTE": os.access(path, os.X_OK),
     }
 
 
-def backup(path: str | Path, suffix: str = '.bak') -> Path | None:
+def backup(path: str | Path, suffix: str = ".bak") -> Path | None:
     """
     Create backup of a file if it exists.
 
@@ -346,12 +353,14 @@ def temp_dir() -> Path:
         Path to temp directory.
     """
     import tempfile
+
     return Path(tempfile.gettempdir())
 
 
 # =============================================================================
 # List Utilities
 # =============================================================================
+
 
 def simplify_nested_list(nested_list: list) -> list:
     """
@@ -391,6 +400,7 @@ def simplify_nested_list(nested_list: list) -> list:
 # Mask Utilities
 # =============================================================================
 
+
 def amber_mask_to_dict(mask_string: str) -> dict[str, list[str]]:
     """
     Parse AMBER-style residue@atom mask to dictionary.
@@ -413,23 +423,23 @@ def amber_mask_to_dict(mask_string: str) -> dict[str, list[str]]:
     {'ETA': ['all']}
     """
     # Remove leading colon if present
-    if mask_string.startswith(':'):
+    if mask_string.startswith(":"):
         mask_string = mask_string[1:]
 
     result = {}
-    parts = mask_string.split(';')
+    parts = mask_string.split(";")
 
     for part in parts:
-        if '@' in part:
-            residue, atoms = part.split('@', 1)
-            atom_list = [a.strip() for a in atoms.split(',')]
+        if "@" in part:
+            residue, atoms = part.split("@", 1)
+            atom_list = [a.strip() for a in atoms.split(",")]
             if residue in result:
                 result[residue].extend(atom_list)
             else:
                 result[residue] = atom_list
         else:
             # Just residue name, select all atoms
-            result[part.strip()] = ['all']
+            result[part.strip()] = ["all"]
 
     return result
 
@@ -456,16 +466,16 @@ def parse_num_mask(mask: str) -> list[int]:
     [1, 2, 3, 7, 10, 11, 12]
     """
     result = []
-    parts = mask.split(',')
+    parts = mask.split(",")
 
     for part in parts:
         part = part.strip()
         # Support both ':' and '-' as range separators
-        if ':' in part:
-            a, b = map(int, part.split(':'))
+        if ":" in part:
+            a, b = map(int, part.split(":"))
             result.extend(range(a, b + 1))
-        elif '-' in part:
-            a, b = map(int, part.split('-'))
+        elif "-" in part:
+            a, b = map(int, part.split("-"))
             result.extend(range(a, b + 1))
         else:
             result.append(int(part))
@@ -498,7 +508,7 @@ def num_list_to_mask(num_list: list[int]) -> str:
     ''
     """
     if not num_list:
-        return ''
+        return ""
 
     if len(num_list) == 1:
         return str(num_list[0])
@@ -509,16 +519,17 @@ def num_list_to_mask(num_list: list[int]) -> str:
     for k, g in groupby(enumerate(num_list), lambda x: x[0] - x[1]):
         group = list(map(itemgetter(1), g))
         if len(group) > 1:
-            ranges.append(f'{group[0]}-{group[-1]}')
+            ranges.append(f"{group[0]}-{group[-1]}")
         else:
             ranges.append(str(group[0]))
 
-    return ','.join(ranges)
+    return ",".join(ranges)
 
 
 # =============================================================================
 # Logging Utilities
 # =============================================================================
+
 
 class LogFormatter(logging.Formatter):
     """
@@ -574,7 +585,7 @@ def traceback_plus() -> str:
     stack.reverse()
 
     # Format standard traceback
-    output.append(''.join(traceback.format_exc()))
+    output.append("".join(traceback.format_exc()))
     output.append("\nLocals by frame, innermost last:\n")
 
     for frame in stack:
@@ -588,7 +599,7 @@ def traceback_plus() -> str:
             except Exception:
                 output.append(f"\t{key:>20} = <ERROR WHILE PRINTING VALUE>\n")
 
-    return ''.join(output)
+    return "".join(output)
 
 
 def clip_str(s: str, length: int) -> str:
@@ -609,7 +620,7 @@ def clip_str(s: str, length: int) -> str:
     """
     if len(s) <= length:
         return s
-    return s[:length - 3] + '...'
+    return s[: length - 3] + "..."
 
 
 # =============================================================================
@@ -631,7 +642,7 @@ numListToMask = num_list_to_mask
 tracebackPlus = traceback_plus
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(f"Project root: {project_root()}")
     print(f"Data root: {data_root()}")
     print(f"Solvents root: {solvents_root()}")

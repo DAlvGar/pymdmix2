@@ -2,7 +2,6 @@
 
 import numpy as np
 import pytest
-from pathlib import Path
 
 from pymdmix.analysis.hotspots import Hotspot, HotSpotSet
 
@@ -12,26 +11,42 @@ def sample_hotspots():
     """Create sample hotspots for testing."""
     return [
         Hotspot(
-            id=0, probe="OH", centroid=(0.0, 0.0, 0.0),
-            energy=-2.0, volume=10.0, n_points=20,
+            id=0,
+            probe="OH",
+            centroid=(0.0, 0.0, 0.0),
+            energy=-2.0,
+            volume=10.0,
+            n_points=20,
             coords=np.random.randn(20, 3),
             energies=np.random.randn(20) - 2.0,
         ),
         Hotspot(
-            id=1, probe="OH", centroid=(1.0, 1.0, 1.0),
-            energy=-1.5, volume=8.0, n_points=15,
+            id=1,
+            probe="OH",
+            centroid=(1.0, 1.0, 1.0),
+            energy=-1.5,
+            volume=8.0,
+            n_points=15,
             coords=np.random.randn(15, 3) + 1,
             energies=np.random.randn(15) - 1.5,
         ),
         Hotspot(
-            id=2, probe="OH", centroid=(10.0, 10.0, 10.0),
-            energy=-0.5, volume=5.0, n_points=10,
+            id=2,
+            probe="OH",
+            centroid=(10.0, 10.0, 10.0),
+            energy=-0.5,
+            volume=5.0,
+            n_points=10,
             coords=np.random.randn(10, 3) + 10,
             energies=np.random.randn(10) - 0.5,
         ),
         Hotspot(
-            id=3, probe="OH", centroid=(11.0, 10.0, 10.0),
-            energy=-0.3, volume=3.0, n_points=5,
+            id=3,
+            probe="OH",
+            centroid=(11.0, 10.0, 10.0),
+            energy=-0.3,
+            volume=3.0,
+            n_points=5,
             coords=np.random.randn(5, 3) + np.array([11, 10, 10]),
             energies=np.random.randn(5) - 0.3,
         ),
@@ -184,7 +199,7 @@ class TestHotSpotSetIO:
         hs_set = HotSpotSet(probe="OH", name="test", hotspots=sample_hotspots)
         pdb_path = tmp_path / "hotspots.pdb"
         hs_set.to_pdb(pdb_path)
-        
+
         assert pdb_path.exists()
         content = pdb_path.read_text()
         assert "HETATM" in content
@@ -195,9 +210,10 @@ class TestHotSpotSetIO:
         hs_set = HotSpotSet(probe="OH", name="test", hotspots=sample_hotspots)
         json_path = tmp_path / "hotspots.json"
         hs_set.to_json(json_path)
-        
+
         assert json_path.exists()
         import json
+
         with open(json_path) as f:
             data = json.load(f)
         assert data["n_hotspots"] == 4

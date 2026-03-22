@@ -10,20 +10,20 @@ Usage:
     pymdmix info project
     pymdmix info solvents
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional, List
 
 import click
 
 from pymdmix import __version__
 
-
 # =============================================================================
 # CLI Group
 # =============================================================================
+
 
 @click.group()
 @click.version_option(version=__version__, prog_name="pyMDMix")
@@ -45,6 +45,7 @@ def cli(ctx: click.Context, verbose: bool, debug: bool) -> None:
 # CREATE Commands
 # =============================================================================
 
+
 @cli.group()
 def create() -> None:
     """Create projects, replicas, or solvents."""
@@ -57,18 +58,21 @@ def create() -> None:
 @click.option("-d", "--directory", type=click.Path(), help="Project directory (default: ./<name>)")
 @click.option("--force", is_flag=True, help="Overwrite existing project")
 @click.pass_context
-def create_project(ctx: click.Context, name: str, config: Optional[str], 
-                   directory: Optional[str], force: bool) -> None:
+def create_project(
+    ctx: click.Context, name: str, config: str | None, directory: str | None, force: bool
+) -> None:
     """Create a new pyMDMix project.
 
     Examples:
         pymdmix create project -n myproject
         pymdmix create project -n myproject -f config.yaml
     """
-    from pymdmix.project import Project, Config
+    from pymdmix.project import Config, Project
 
     verbose = ctx.obj.get("verbose", False)
-    project_dir = Path(directory) if directory else (Path.cwd() / name if name != "." else Path.cwd())
+    project_dir = (
+        Path(directory) if directory else (Path.cwd() / name if name != "." else Path.cwd())
+    )
 
     if project_dir.exists() and not force:
         mdmix_dir = project_dir / ".mdmix"
@@ -93,8 +97,14 @@ def create_project(ctx: click.Context, name: str, config: Optional[str],
 
 
 @create.command("solvent")
-@click.option("-f", "--file", "config", type=click.Path(exists=True), required=True, 
-              help="Solvent config file")
+@click.option(
+    "-f",
+    "--file",
+    "config",
+    type=click.Path(exists=True),
+    required=True,
+    help="Solvent config file",
+)
 @click.option("--validate", is_flag=True, help="Validate only, don't add")
 @click.pass_context
 def create_solvent(ctx: click.Context, config: str, validate: bool) -> None:
@@ -133,6 +143,7 @@ def create_solvent(ctx: click.Context, config: str, validate: bool) -> None:
 # ADD Commands
 # =============================================================================
 
+
 @cli.group()
 def add() -> None:
     """Add systems, replicas, or groups to an existing project."""
@@ -140,10 +151,21 @@ def add() -> None:
 
 
 @add.command("system")
-@click.option("-f", "--file", "config", type=click.Path(exists=True), required=True,
-              help="System configuration file")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory (default: current)")
+@click.option(
+    "-f",
+    "--file",
+    "config",
+    type=click.Path(exists=True),
+    required=True,
+    help="System configuration file",
+)
+@click.option(
+    "-p",
+    "--project",
+    type=click.Path(exists=True),
+    default=".",
+    help="Project directory (default: current)",
+)
 @click.pass_context
 def add_system(ctx: click.Context, config: str, project: str) -> None:
     """Add a system to the project from a configuration file.
@@ -158,8 +180,8 @@ def add_system(ctx: click.Context, config: str, project: str) -> None:
         pymdmix add system -f system.cfg
         pymdmix add system -f system.cfg -p /path/to/project
     """
-    from pymdmix.project import Project
     from pymdmix.io.parsers import parse_system_config
+    from pymdmix.project import Project
 
     verbose = ctx.obj.get("verbose", False)
     project_path = Path(project)
@@ -170,7 +192,7 @@ def add_system(ctx: click.Context, config: str, project: str) -> None:
 
     # Parse system config
     system_config = parse_system_config(config_path)
-    
+
     if verbose:
         click.echo(f"  System name: {system_config.name}")
         click.echo(f"  Input file: {system_config.input_file}")
@@ -183,10 +205,21 @@ def add_system(ctx: click.Context, config: str, project: str) -> None:
 
 
 @add.command("replica")
-@click.option("-f", "--file", "config", type=click.Path(exists=True), required=True,
-              help="Replica configuration file")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory (default: current)")
+@click.option(
+    "-f",
+    "--file",
+    "config",
+    type=click.Path(exists=True),
+    required=True,
+    help="Replica configuration file",
+)
+@click.option(
+    "-p",
+    "--project",
+    type=click.Path(exists=True),
+    default=".",
+    help="Project directory (default: current)",
+)
 @click.option("--count", type=int, default=1, help="Number of replicas to create")
 @click.pass_context
 def add_replica(ctx: click.Context, config: str, project: str, count: int) -> None:
@@ -202,8 +235,8 @@ def add_replica(ctx: click.Context, config: str, project: str, count: int) -> No
         pymdmix add replica -f replica.cfg
         pymdmix add replica -f replica.cfg --count 3
     """
-    from pymdmix.project import Project
     from pymdmix.io.parsers import parse_replica_config
+    from pymdmix.project import Project
 
     verbose = ctx.obj.get("verbose", False)
     project_path = Path(project)
@@ -241,8 +274,13 @@ def add_replica(ctx: click.Context, config: str, project: str, count: int) -> No
 @add.command("group")
 @click.option("-n", "--name", required=True, help="Group name")
 @click.option("-s", "--selection", multiple=True, required=True, help="Replica names to include")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory (default: current)")
+@click.option(
+    "-p",
+    "--project",
+    type=click.Path(exists=True),
+    default=".",
+    help="Project directory (default: current)",
+)
 @click.pass_context
 def add_group(ctx: click.Context, name: str, selection: tuple, project: str) -> None:
     """Create a named group of replicas for batch operations.
@@ -273,6 +311,7 @@ def add_group(ctx: click.Context, name: str, selection: tuple, project: str) -> 
 # SETUP Commands
 # =============================================================================
 
+
 @cli.group()
 def setup() -> None:
     """Structure preparation and system setup."""
@@ -286,15 +325,21 @@ def setup() -> None:
 @click.option("--disulfide/--no-disulfide", default=True, help="Detect disulfides")
 @click.option("--remove-water/--keep-water", default=True, help="Remove waters")
 @click.pass_context
-def setup_prepare(ctx: click.Context, structure: str, output: Optional[str],
-                  cap: bool, disulfide: bool, remove_water: bool) -> None:
+def setup_prepare(
+    ctx: click.Context,
+    structure: str,
+    output: str | None,
+    cap: bool,
+    disulfide: bool,
+    remove_water: bool,
+) -> None:
     """Prepare a structure for MD simulation.
 
     Examples:
         pymdmix setup prepare protein.pdb -o prepared.pdb
         pymdmix setup prepare protein.pdb --no-cap
     """
-    from pymdmix.setup.prepare import prepare_structure, StructurePreparationOptions
+    from pymdmix.setup.prepare import StructurePreparationOptions, prepare_structure
 
     verbose = ctx.obj.get("verbose", False)
     input_path = Path(structure)
@@ -326,23 +371,23 @@ def setup_prepare(ctx: click.Context, structure: str, output: Optional[str],
 @click.option("-o", "--output", type=click.Path(), help="Output prefix")
 @click.option("--buffer", type=float, default=12.0, help="Box buffer size (Å)")
 @click.pass_context
-def setup_solvate(ctx: click.Context, structure: str, solvent: str,
-                  output: Optional[str], buffer: float) -> None:
+def setup_solvate(
+    ctx: click.Context, structure: str, solvent: str, output: str | None, buffer: float
+) -> None:
     """Solvate a structure with a solvent mixture.
 
     Examples:
         pymdmix setup solvate protein.pdb -s ETA -o solvated
     """
-    from pymdmix.setup.solvate import solvate_structure, SolvationOptions
     from pymdmix.core.solvent import SolventLibrary
+    from pymdmix.setup.solvate import SolvationOptions, solvate_structure
 
     input_path = Path(structure)
     output_prefix = output or input_path.stem + "_solvated"
 
     library = SolventLibrary()
-    try:
-        solv = library.get(solvent)
-    except KeyError:
+    solv = library.get(solvent)
+    if solv is None:
         click.secho(f"✗ Unknown solvent: {solvent}", fg="red")
         click.echo(f"  Available: {', '.join(library.list_solvents())}")
         sys.exit(1)
@@ -354,7 +399,7 @@ def setup_solvate(ctx: click.Context, structure: str, solvent: str,
 
     top_path = Path(output_prefix + ".prmtop")
     crd_path = Path(output_prefix + ".rst7")
-    result.topology.write(str(top_path))
+    result.save_topology(top_path)
     result.save_coordinates(str(crd_path))
 
     click.secho("✓ Solvation complete", fg="green")
@@ -366,6 +411,7 @@ def setup_solvate(ctx: click.Context, structure: str, solvent: str,
 # ANALYZE Commands
 # =============================================================================
 
+
 @cli.group()
 def analyze() -> None:
     """Run analysis on simulation data."""
@@ -375,9 +421,9 @@ def analyze() -> None:
 def parse_selection(selection_type: str, selection: tuple, project_path: Path):
     """Parse replica selection and return list of replicas."""
     from pymdmix.project import Project
-    
+
     proj = Project.load(project_path)
-    
+
     if selection_type == "all":
         return list(proj.replicas.values()), proj
     elif selection_type == "bysolvent":
@@ -400,16 +446,24 @@ def parse_selection(selection_type: str, selection: tuple, project_path: Path):
 @analyze.command("align")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("-N", "--nanoselect", help="Nanosecond range (e.g., 1:10)")
 @click.option("-C", "--ncpus", type=int, default=1, help="Number of CPUs")
 @click.option("--mask", help="Alignment mask (residue range)")
 @click.option("--ref", type=click.Path(exists=True), help="Reference PDB file")
 @click.pass_context
-def analyze_align(ctx: click.Context, selection_type: str, selection: tuple,
-                  project: str, nanoselect: Optional[str], ncpus: int,
-                  mask: Optional[str], ref: Optional[str]) -> None:
+def analyze_align(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    nanoselect: str | None,
+    ncpus: int,
+    mask: str | None,
+    ref: str | None,
+) -> None:
     """Align trajectories to reference structure.
 
     Selection types:
@@ -429,7 +483,7 @@ def analyze_align(ctx: click.Context, selection_type: str, selection: tuple,
     project_path = Path(project)
 
     replicas, proj = parse_selection(selection_type, selection, project_path)
-    
+
     if not replicas:
         click.secho("✗ No replicas selected", fg="red")
         sys.exit(1)
@@ -466,16 +520,24 @@ def analyze_align(ctx: click.Context, selection_type: str, selection: tuple,
 @analyze.command("density")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("-N", "--nanoselect", help="Nanosecond range (e.g., 1:10)")
 @click.option("-C", "--ncpus", type=int, default=1, help="Number of CPUs")
 @click.option("--spacing", type=float, default=0.5, help="Grid spacing (Å)")
 @click.option("--average", is_flag=True, help="Average across replicas")
 @click.pass_context
-def analyze_density(ctx: click.Context, selection_type: str, selection: tuple,
-                    project: str, nanoselect: Optional[str], ncpus: int,
-                    spacing: float, average: bool) -> None:
+def analyze_density(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    nanoselect: str | None,
+    ncpus: int,
+    spacing: float,
+    average: bool,
+) -> None:
     """Calculate probe density grids from trajectory.
 
     Examples:
@@ -488,22 +550,32 @@ def analyze_density(ctx: click.Context, selection_type: str, selection: tuple,
     project_path = Path(project)
 
     replicas, proj = parse_selection(selection_type, selection, project_path)
-    
+
     if not replicas:
         click.secho("✗ No replicas selected", fg="red")
         sys.exit(1)
 
     click.echo(f"Calculating density for {len(replicas)} replica(s)")
 
-    action = DensityAction(spacing=spacing, nprocs=ncpus)
+    action = DensityAction()
 
     for replica in replicas:
         click.echo(f"  Processing: {replica.name}")
         try:
-            result = action.run(replica)
-            if verbose:
-                for probe, grid in result.grids.items():
-                    click.echo(f"    {probe}: max density = {grid.data.max():.2f}")
+            trajectory = replica.get_trajectory()
+            reference = replica.get_pdb()
+            solvent = replica.get_solvent()
+            probe_selections = {p.name: p.selection for p in solvent.probes}
+            result = action.run(
+                trajectory,
+                reference=reference,
+                probe_selections=probe_selections,
+                spacing=spacing,
+                n_workers=ncpus,
+            )
+            if verbose and result.success:
+                for name in result.metadata.get("probe_names", []):
+                    click.echo(f"    {name}: density grid written")
         except Exception as e:
             click.secho(f"    ✗ Error: {e}", fg="red")
 
@@ -513,13 +585,20 @@ def analyze_density(ctx: click.Context, selection_type: str, selection: tuple,
 @analyze.command("energy")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("-T", "--temperature", type=float, default=300.0, help="Temperature (K)")
 @click.option("--average", is_flag=True, help="Average across replicas")
 @click.pass_context
-def analyze_energy(ctx: click.Context, selection_type: str, selection: tuple,
-                   project: str, temperature: float, average: bool) -> None:
+def analyze_energy(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    temperature: float,
+    average: bool,
+) -> None:
     """Convert density grids to free energy.
 
     Uses ΔG = -RT ln(ρ/ρ₀)
@@ -534,7 +613,7 @@ def analyze_energy(ctx: click.Context, selection_type: str, selection: tuple,
     project_path = Path(project)
 
     replicas, proj = parse_selection(selection_type, selection, project_path)
-    
+
     if not replicas:
         click.secho("✗ No replicas selected", fg="red")
         sys.exit(1)
@@ -547,10 +626,12 @@ def analyze_energy(ctx: click.Context, selection_type: str, selection: tuple,
     for replica in replicas:
         click.echo(f"  Processing: {replica.name}")
         try:
-            result = action.run(replica)
-            if verbose:
-                for probe, grid in result.grids.items():
-                    click.echo(f"    {probe}: min ΔG = {grid.data.min():.2f} kcal/mol")
+            result = action.run(replica=replica)
+            if verbose and result.success:
+                energy_result = result.metadata.get("energy_result")
+                if energy_result:
+                    for probe, grid in energy_result.grids.items():
+                        click.echo(f"    {probe}: min ΔG = {grid.data.min():.2f} kcal/mol")
         except Exception as e:
             click.secho(f"    ✗ Error: {e}", fg="red")
 
@@ -560,13 +641,20 @@ def analyze_energy(ctx: click.Context, selection_type: str, selection: tuple,
 @analyze.command("hotspots")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("--threshold", type=float, default=-1.0, help="Energy cutoff (kcal/mol)")
 @click.option("--min-size", type=int, default=3, help="Minimum cluster size")
 @click.pass_context
-def analyze_hotspots(ctx: click.Context, selection_type: str, selection: tuple,
-                     project: str, threshold: float, min_size: int) -> None:
+def analyze_hotspots(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    threshold: float,
+    min_size: int,
+) -> None:
     """Detect binding hotspots from energy grids.
 
     Examples:
@@ -575,11 +663,10 @@ def analyze_hotspots(ctx: click.Context, selection_type: str, selection: tuple,
     """
     from pymdmix.analysis import HotspotAction
 
-    verbose = ctx.obj.get("verbose", False)
     project_path = Path(project)
 
-    replicas, proj = parse_selection(selection_type, selection, project_path)
-    
+    replicas, _ = parse_selection(selection_type, selection, project_path)
+
     if not replicas:
         click.secho("✗ No replicas selected", fg="red")
         sys.exit(1)
@@ -587,16 +674,27 @@ def analyze_hotspots(ctx: click.Context, selection_type: str, selection: tuple,
     click.echo(f"Detecting hotspots for {len(replicas)} replica(s)")
     click.echo(f"  Threshold: {threshold} kcal/mol")
 
-    action = HotspotAction(energy_cutoff=threshold, min_size=min_size)
+    action = HotspotAction()
 
     for replica in replicas:
         click.echo(f"  Processing: {replica.name}")
         try:
-            hotspots = action.run(replica)
-            click.echo(f"    Found {len(hotspots)} hotspot(s)")
-            if verbose:
-                for i, hs in enumerate(hotspots[:5]):
-                    click.echo(f"      {i+1}. ΔG = {hs.energy:.2f} kcal/mol")
+            # Load energy grids (DG grids) from the replica's grids directory
+            energy_grids = {
+                g.metadata.get("name", f"probe_{i}"): g
+                for i, g in enumerate(replica.fetch_grids(suffix="_DG"))
+            }
+            if not energy_grids:
+                click.secho(f"    ✗ No energy grids found for {replica.name}", fg="yellow")
+                continue
+            result = action.run(
+                grids=energy_grids,
+                energy_cutoff=threshold,
+                min_points=min_size,
+                output_dir=replica.density_path,
+            )
+            n_hotspots = result.metadata.get("n_hotspots", 0) if result.success else 0
+            click.echo(f"    Found {n_hotspots} hotspot(s)")
         except Exception as e:
             click.secho(f"    ✗ Error: {e}", fg="red")
 
@@ -605,17 +703,25 @@ def analyze_hotspots(ctx: click.Context, selection_type: str, selection: tuple,
 
 @analyze.command("filter-hotspots")
 @click.argument("input_file", type=click.Path(exists=True))
-@click.option("-o", "--output", type=click.Path(), help="Output file (default: <input>_filtered.json)")
+@click.option(
+    "-o", "--output", type=click.Path(), help="Output file (default: <input>_filtered.json)"
+)
 @click.option("--max-energy", type=float, help="Maximum energy (kcal/mol)")
 @click.option("--min-volume", type=float, help="Minimum volume (Å³)")
 @click.option("--min-points", type=int, help="Minimum grid points")
 @click.option("--cluster", type=float, help="Cluster with this distance cutoff (Å)")
 @click.option("--representatives", is_flag=True, help="Keep only cluster representatives")
 @click.pass_context
-def analyze_filter_hotspots(ctx: click.Context, input_file: str, output: Optional[str],
-                            max_energy: Optional[float], min_volume: Optional[float],
-                            min_points: Optional[int], cluster: Optional[float],
-                            representatives: bool) -> None:
+def analyze_filter_hotspots(
+    ctx: click.Context,
+    input_file: str,
+    output: str | None,
+    max_energy: float | None,
+    min_volume: float | None,
+    min_points: int | None,
+    cluster: float | None,
+    representatives: bool,
+) -> None:
     """Filter and cluster hotspots.
 
     Examples:
@@ -624,8 +730,10 @@ def analyze_filter_hotspots(ctx: click.Context, input_file: str, output: Optiona
         pymdmix analyze filter-hotspots hotspots.json --min-volume 5.0 -o filtered.json
     """
     import json
-    from pymdmix.analysis.hotspots import Hotspot, HotSpotSet
+
     import numpy as np
+
+    from pymdmix.analysis.hotspots import Hotspot, HotSpotSet
 
     # Load hotspots
     with open(input_file) as f:
@@ -634,16 +742,18 @@ def analyze_filter_hotspots(ctx: click.Context, input_file: str, output: Optiona
     # Reconstruct hotspots
     hotspots = []
     for h in data.get("hotspots", []):
-        hotspots.append(Hotspot(
-            id=h["id"],
-            probe=h["probe"],
-            centroid=tuple(h["centroid"]),
-            energy=h["energy"],
-            volume=h["volume"],
-            n_points=h["n_points"],
-            coords=np.array(h.get("coords", [[0, 0, 0]])),
-            energies=np.array(h.get("energies", [h["energy"]])),
-        ))
+        hotspots.append(
+            Hotspot(
+                id=h["id"],
+                probe=h["probe"],
+                centroid=tuple(h["centroid"]),
+                energy=h["energy"],
+                volume=h["volume"],
+                n_points=h["n_points"],
+                coords=np.array(h.get("coords", [[0, 0, 0]])),
+                energies=np.array(h.get("energies", [h["energy"]])),
+            )
+        )
 
     click.echo(f"Loaded {len(hotspots)} hotspots from {input_file}")
 
@@ -668,7 +778,7 @@ def analyze_filter_hotspots(ctx: click.Context, input_file: str, output: Optiona
         click.echo(f"  After points filter (≥{min_points}): {len(hs_set)} hotspots")
 
     if cluster is not None:
-        labels = hs_set.cluster(cutoff=cluster)
+        hs_set.cluster(cutoff=cluster)
         click.echo(f"  Clustering ({cluster} Å): {hs_set.n_clusters} clusters")
 
         if representatives:
@@ -686,15 +796,22 @@ def analyze_filter_hotspots(ctx: click.Context, input_file: str, output: Optiona
 @analyze.command("residence")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("-N", "--nanoselect", help="Nanosecond range")
 @click.option("--cutoff", type=float, default=3.5, help="Distance cutoff (Å)")
 @click.option("--min-time", type=float, default=5.0, help="Minimum residence time (ps)")
 @click.pass_context
-def analyze_residence(ctx: click.Context, selection_type: str, selection: tuple,
-                      project: str, nanoselect: Optional[str], cutoff: float,
-                      min_time: float) -> None:
+def analyze_residence(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    nanoselect: str | None,
+    cutoff: float,
+    min_time: float,
+) -> None:
     """Calculate probe residence times.
 
     Examples:
@@ -707,21 +824,26 @@ def analyze_residence(ctx: click.Context, selection_type: str, selection: tuple,
     project_path = Path(project)
 
     replicas, proj = parse_selection(selection_type, selection, project_path)
-    
+
     if not replicas:
         click.secho("✗ No replicas selected", fg="red")
         sys.exit(1)
 
     click.echo(f"Calculating residence times for {len(replicas)} replica(s)")
 
-    action = ResidenceAction(cutoff=cutoff, min_time=min_time)
+    action = ResidenceAction()
 
     for replica in replicas:
         click.echo(f"  Processing: {replica.name}")
         try:
-            result = action.run(replica)
-            if verbose:
-                click.echo(f"    Mean residence: {result.mean_residence:.1f} ps")
+            trajectory = replica.get_trajectory()
+            result = action.run(
+                trajectory=trajectory,
+                tolerance=cutoff,
+            )
+            if verbose and result.success:
+                mean_res = result.metadata.get("mean_residence", 0.0)
+                click.echo(f"    Mean residence: {mean_res:.1f} ps")
         except Exception as e:
             click.secho(f"    ✗ Error: {e}", fg="red")
 
@@ -732,11 +854,12 @@ def analyze_residence(ctx: click.Context, selection_type: str, selection: tuple,
 # INFO Commands
 # =============================================================================
 
+
 @cli.group(invoke_without_command=True)
 @click.option("-p", "--project", type=click.Path(exists=True), help="Project directory")
 @click.option("-s", "--solvents", is_flag=True, help="List available solvents")
 @click.pass_context
-def info(ctx: click.Context, project: Optional[str], solvents: bool) -> None:
+def info(ctx: click.Context, project: str | None, solvents: bool) -> None:
     """Show information about projects, replicas, or solvents."""
     # Handle legacy flag-based invocation
     if ctx.invoked_subcommand is None:
@@ -749,8 +872,9 @@ def info(ctx: click.Context, project: Optional[str], solvents: bool) -> None:
 
 
 @info.command("project")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.pass_context
 def info_project(ctx: click.Context, project: str) -> None:
     """Show project summary.
@@ -778,13 +902,14 @@ def info_project(ctx: click.Context, project: str) -> None:
     if proj.replicas:
         click.echo("\nReplicas:")
         for name, rep in proj.replicas.items():
-            status = getattr(rep.status, 'value', str(rep.status))
+            status = getattr(rep.status, "value", str(rep.status))
             click.echo(f"  - {name}: {rep.solvent} ({status})")
 
 
 @info.command("systems")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("--detailed", is_flag=True, help="Show detailed information")
 @click.pass_context
 def info_systems(ctx: click.Context, project: str, detailed: bool) -> None:
@@ -813,8 +938,9 @@ def info_systems(ctx: click.Context, project: str, detailed: bool) -> None:
 
 
 @info.command("replicas")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("--detailed", is_flag=True, help="Show detailed information")
 @click.pass_context
 def info_replicas(ctx: click.Context, project: str, detailed: bool) -> None:
@@ -835,7 +961,7 @@ def info_replicas(ctx: click.Context, project: str, detailed: bool) -> None:
 
     click.echo(f"Replicas ({len(proj.replicas)}):")
     for name, rep in proj.replicas.items():
-        status = getattr(rep.status, 'value', str(rep.status))
+        status = getattr(rep.status, "value", str(rep.status))
         click.echo(f"  {name}: {rep.solvent} ({status})")
         if detailed:
             click.echo(f"    System: {rep.system}")
@@ -872,14 +998,17 @@ def info_solvents(ctx: click.Context, detailed: bool) -> None:
 
 @info.command("settings")
 @click.option("-s", "--solvent", default="WAT", help="Solvent name")
-@click.option("-f", "--file", "config_file", type=click.Path(exists=True),
-              help="Load settings from TOML file")
-@click.option("--restraints", type=click.Choice(["FREE", "BB", "HA"]), default="FREE",
-              help="Restraint mode")
+@click.option(
+    "-f", "--file", "config_file", type=click.Path(exists=True), help="Load settings from TOML file"
+)
+@click.option(
+    "--restraints", type=click.Choice(["FREE", "BB", "HA"]), default="FREE", help="Restraint mode"
+)
 @click.option("--nanos", type=int, default=20, help="Simulation length")
 @click.pass_context
-def info_settings(ctx: click.Context, solvent: str, config_file: Optional[str],
-                  restraints: str, nanos: int) -> None:
+def info_settings(
+    ctx: click.Context, solvent: str, config_file: str | None, restraints: str, nanos: int
+) -> None:
     """Show MD settings (default or from file).
 
     Examples:
@@ -909,8 +1038,9 @@ def info_settings(ctx: click.Context, solvent: str, config_file: Optional[str],
 
 @info.command("analysis")
 @click.argument("replica_name")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.pass_context
 def info_analysis(ctx: click.Context, replica_name: str, project: str) -> None:
     """Show analysis status for a replica.
@@ -924,23 +1054,23 @@ def info_analysis(ctx: click.Context, replica_name: str, project: str) -> None:
     proj = Project.load(project_path)
 
     replica = proj.get_replica(replica_name)
-    
+
     click.echo(f"Replica: {replica.name}")
     click.echo(f"  Solvent: {replica.solvent}")
     click.echo(f"  Status: {replica.status}")
-    
+
     # Check for analysis outputs
     replica_path = proj.path / replica.name
-    
+
     align_path = replica_path / "align"
     grids_path = replica_path / "grids"
     hotspots_path = replica_path / "hotspots"
-    
+
     click.echo("\nAnalysis status:")
     click.echo(f"  Alignment: {'✓' if align_path.exists() else '✗'}")
     click.echo(f"  Density grids: {'✓' if grids_path.exists() else '✗'}")
     click.echo(f"  Hotspots: {'✓' if hotspots_path.exists() else '✗'}")
-    
+
     if grids_path.exists():
         grids = list(grids_path.glob("*.dx"))
         if grids:
@@ -953,6 +1083,7 @@ def info_analysis(ctx: click.Context, replica_name: str, project: str) -> None:
 # PLOT Commands
 # =============================================================================
 
+
 @cli.group()
 def plot() -> None:
     """Generate plots from analysis data."""
@@ -962,14 +1093,22 @@ def plot() -> None:
 @plot.command("rmsd")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("-o", "--output", type=click.Path(), help="Output file (default: show)")
-@click.option("--format", "fmt", type=click.Choice(["png", "pdf", "svg"]), default="png",
-              help="Output format")
+@click.option(
+    "--format", "fmt", type=click.Choice(["png", "pdf", "svg"]), default="png", help="Output format"
+)
 @click.pass_context
-def plot_rmsd(ctx: click.Context, selection_type: str, selection: tuple,
-              project: str, output: Optional[str], fmt: str) -> None:
+def plot_rmsd(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    output: str | None,
+    fmt: str,
+) -> None:
     """Plot RMSD from trajectory alignment.
 
     Examples:
@@ -980,7 +1119,7 @@ def plot_rmsd(ctx: click.Context, selection_type: str, selection: tuple,
 
     project_path = Path(project)
     replicas, proj = parse_selection(selection_type, selection, project_path)
-    
+
     if not replicas:
         click.secho("✗ No replicas selected", fg="red")
         sys.exit(1)
@@ -1001,13 +1140,20 @@ def plot_rmsd(ctx: click.Context, selection_type: str, selection: tuple,
 @plot.command("energy")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("--probe", help="Specific probe to plot")
 @click.option("-o", "--output", type=click.Path(), help="Output file")
 @click.pass_context
-def plot_energy(ctx: click.Context, selection_type: str, selection: tuple,
-                project: str, probe: Optional[str], output: Optional[str]) -> None:
+def plot_energy(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    probe: str | None,
+    output: str | None,
+) -> None:
     """Plot energy distribution histograms.
 
     Examples:
@@ -1021,13 +1167,20 @@ def plot_energy(ctx: click.Context, selection_type: str, selection: tuple,
 @plot.command("density")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("--probe", help="Specific probe to plot")
 @click.option("-o", "--output", type=click.Path(), help="Output file")
 @click.pass_context
-def plot_density(ctx: click.Context, selection_type: str, selection: tuple,
-                 project: str, probe: Optional[str], output: Optional[str]) -> None:
+def plot_density(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    probe: str | None,
+    output: str | None,
+) -> None:
     """Plot density distribution histograms.
 
     Examples:
@@ -1041,6 +1194,7 @@ def plot_density(ctx: click.Context, selection_type: str, selection: tuple,
 # QUEUE Commands
 # =============================================================================
 
+
 @cli.group()
 def queue() -> None:
     """Generate and manage queue submission scripts (SLURM, PBS, SGE, LSF)."""
@@ -1050,16 +1204,27 @@ def queue() -> None:
 @queue.command("generate")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
-@click.option("--system", type=click.Choice(["slurm", "pbs", "sge", "lsf"]), default="slurm",
-              help="Queue system")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.option(
+    "--system",
+    type=click.Choice(["slurm", "pbs", "sge", "lsf"]),
+    default="slurm",
+    help="Queue system",
+)
 @click.option("--template", type=click.Path(exists=True), help="Custom template file")
 @click.option("--config", type=click.Path(exists=True), help="Queue configuration file")
 @click.pass_context
-def queue_generate(ctx: click.Context, selection_type: str, selection: tuple,
-                   project: str, system: str, template: Optional[str],
-                   config: Optional[str]) -> None:
+def queue_generate(
+    ctx: click.Context,
+    selection_type: str,
+    selection: tuple,
+    project: str,
+    system: str,
+    template: str | None,
+    config: str | None,
+) -> None:
     """Generate queue submission scripts.
 
     Examples:
@@ -1070,7 +1235,7 @@ def queue_generate(ctx: click.Context, selection_type: str, selection: tuple,
 
     project_path = Path(project)
     replicas, proj = parse_selection(selection_type, selection, project_path)
-    
+
     if not replicas:
         click.secho("✗ No replicas selected", fg="red")
         sys.exit(1)
@@ -1084,8 +1249,23 @@ def queue_generate(ctx: click.Context, selection_type: str, selection: tuple,
     for replica in replicas:
         replica_path = proj.path / replica.name
         script_path = replica_path / f"submit_{system}.sh"
-        
-        script = generate_queue_script(replica, queue_config, template=template)
+
+        # Read run commands from COMMANDS.sh if it exists, otherwise use empty list
+        commands_file = replica_path / "COMMANDS.sh"
+        if commands_file.exists():
+            commands = [
+                line.strip()
+                for line in commands_file.read_text().splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+        else:
+            commands = []
+        script = generate_queue_script(
+            config=queue_config,
+            job_name=replica.name,
+            commands=commands,
+            work_dir=replica_path,
+        )
         script_path.write_text(script)
         click.echo(f"  {replica.name} → {script_path.name}")
 
@@ -1095,12 +1275,14 @@ def queue_generate(ctx: click.Context, selection_type: str, selection: tuple,
 @queue.command("submit")
 @click.argument("selection_type", type=click.Choice(["all", "bysolvent", "byname", "group"]))
 @click.option("-s", "--selection", multiple=True, help="Selection values")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("--dry-run", is_flag=True, help="Show commands without executing")
 @click.pass_context
-def queue_submit(ctx: click.Context, selection_type: str, selection: tuple,
-                 project: str, dry_run: bool) -> None:
+def queue_submit(
+    ctx: click.Context, selection_type: str, selection: tuple, project: str, dry_run: bool
+) -> None:
     """Submit jobs to queue.
 
     Examples:
@@ -1111,7 +1293,7 @@ def queue_submit(ctx: click.Context, selection_type: str, selection: tuple,
 
     project_path = Path(project)
     replicas, proj = parse_selection(selection_type, selection, project_path)
-    
+
     if not replicas:
         click.secho("✗ No replicas selected", fg="red")
         sys.exit(1)
@@ -1121,20 +1303,21 @@ def queue_submit(ctx: click.Context, selection_type: str, selection: tuple,
     for replica in replicas:
         replica_path = proj.path / replica.name
         scripts = list(replica_path.glob("submit_*.sh"))
-        
+
         if not scripts:
             click.secho(f"  ✗ {replica.name}: No submit script found", fg="red")
             continue
-        
+
         script = scripts[0]
         cmd = f"sbatch {script}" if "slurm" in script.name else f"qsub {script}"
-        
+
         if dry_run:
             click.echo(f"  {replica.name}: {cmd}")
         else:
             try:
-                result = subprocess.run(cmd.split(), capture_output=True, text=True,
-                                       cwd=replica_path)
+                result = subprocess.run(
+                    cmd.split(), capture_output=True, text=True, cwd=replica_path
+                )
                 if result.returncode == 0:
                     click.echo(f"  ✓ {replica.name}: {result.stdout.strip()}")
                 else:
@@ -1150,13 +1333,15 @@ def queue_submit(ctx: click.Context, selection_type: str, selection: tuple,
 # REMOVE Command
 # =============================================================================
 
+
 @cli.command("remove")
-@click.option("-p", "--project", type=click.Path(exists=True), default=".",
-              help="Project directory")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
 @click.option("--group", help="Remove a group")
 @click.option("--force", is_flag=True, help="Don't ask for confirmation")
 @click.pass_context
-def remove(ctx: click.Context, project: str, group: Optional[str], force: bool) -> None:
+def remove(ctx: click.Context, project: str, group: str | None, force: bool) -> None:
     """Remove groups from project.
 
     To remove systems or replicas, delete their folders directly.
@@ -1173,12 +1358,12 @@ def remove(ctx: click.Context, project: str, group: Optional[str], force: bool) 
         if group not in proj.groups:
             click.secho(f"✗ Group not found: {group}", fg="red")
             sys.exit(1)
-        
+
         if not force:
             if not click.confirm(f"Remove group '{group}'?"):
                 click.echo("Aborted")
                 return
-        
+
         proj.remove_group(group)
         proj.save()
         click.secho(f"✓ Group '{group}' removed", fg="green")
@@ -1190,6 +1375,7 @@ def remove(ctx: click.Context, project: str, group: Optional[str], force: bool) 
 # TOOLS Commands
 # =============================================================================
 
+
 @cli.group()
 def tools() -> None:
     """Grid utilities and helper tools."""
@@ -1198,81 +1384,100 @@ def tools() -> None:
 
 # Legacy commands for backwards compatibility
 @tools.command("diffgrids")
-@click.option("-g1", "--grid1", type=click.Path(exists=True), required=True, help="First input grid")
-@click.option("-g2", "--grid2", type=click.Path(exists=True), required=True, help="Second input grid")
+@click.option(
+    "-g1", "--grid1", type=click.Path(exists=True), required=True, help="First input grid"
+)
+@click.option(
+    "-g2", "--grid2", type=click.Path(exists=True), required=True, help="Second input grid"
+)
 @click.option("-o", "--output", type=click.Path(), required=True, help="Output grid file")
 def tools_diffgrids(grid1: str, grid2: str, output: str) -> None:
     """Subtract two grids (grid1 - grid2)."""
     from pymdmix.core.grid import Grid
-    
+
     g1 = Grid.read_dx(grid1)
     g2 = Grid.read_dx(grid2)
-    
+
     if g1.shape != g2.shape:
         click.secho(f"✗ Grid shapes don't match: {g1.shape} vs {g2.shape}", fg="red")
         sys.exit(1)
-    
+
     result = Grid(data=g1.data - g2.data, origin=g1.origin, spacing=g1.spacing)
     result.write_dx(output)
     click.secho(f"✓ Saved difference grid: {output}", fg="green")
 
 
 @tools.command("sumgrids")
-@click.option("-g1", "--grid1", type=click.Path(exists=True), required=True, help="First input grid")
-@click.option("-g2", "--grid2", type=click.Path(exists=True), required=True, help="Second input grid")
+@click.option(
+    "-g1", "--grid1", type=click.Path(exists=True), required=True, help="First input grid"
+)
+@click.option(
+    "-g2", "--grid2", type=click.Path(exists=True), required=True, help="Second input grid"
+)
 @click.option("-o", "--output", type=click.Path(), required=True, help="Output grid file")
 def tools_sumgrids(grid1: str, grid2: str, output: str) -> None:
     """Add two grids (grid1 + grid2)."""
     from pymdmix.core.grid import Grid
-    
+
     g1 = Grid.read_dx(grid1)
     g2 = Grid.read_dx(grid2)
-    
+
     if g1.shape != g2.shape:
         click.secho(f"✗ Grid shapes don't match: {g1.shape} vs {g2.shape}", fg="red")
         sys.exit(1)
-    
+
     result = Grid(data=g1.data + g2.data, origin=g1.origin, spacing=g1.spacing)
     result.write_dx(output)
     click.secho(f"✓ Saved sum grid: {output}", fg="green")
 
 
 @tools.command("avggrids")
-@click.option("-i", "--inputs", type=click.Path(exists=True), multiple=True, required=True, help="Input grids")
+@click.option(
+    "-i", "--inputs", type=click.Path(exists=True), multiple=True, required=True, help="Input grids"
+)
 @click.option("-o", "--output", type=click.Path(), required=True, help="Output grid file")
 @click.option("--boltzmann/--simple", default=False, help="Use Boltzmann averaging")
 @click.option("-T", "--temperature", type=float, default=300.0, help="Temperature (K)")
 def tools_avggrids(inputs: tuple, output: str, boltzmann: bool, temperature: float) -> None:
     """Average multiple grids."""
     import numpy as np
+
     from pymdmix.core.grid import Grid
-    
+
     grids = [Grid.read_dx(g) for g in inputs]
-    
+
     if boltzmann:
         from pymdmix.analysis.energy import boltzmann_average
+
         result = boltzmann_average(grids, temperature=temperature)
     else:
         data = np.mean([g.data for g in grids], axis=0)
         result = Grid(data=data, origin=grids[0].origin, spacing=grids[0].spacing)
-    
+
     result.write_dx(output)
     click.secho(f"✓ Averaged {len(inputs)} grids → {output}", fg="green")
 
 
 @tools.command("energy")
-@click.option("-i", "--input", "ingrid", type=click.Path(exists=True), required=True, help="Input density grid")
+@click.option(
+    "-i",
+    "--input",
+    "ingrid",
+    type=click.Path(exists=True),
+    required=True,
+    help="Input density grid",
+)
 @click.option("-o", "--output", type=click.Path(), required=True, help="Output energy grid")
 @click.option("-T", "--temperature", type=float, default=300.0, help="Temperature (K)")
 def tools_energy_convert(ingrid: str, output: str, temperature: float) -> None:
     """Convert density grid to free energy."""
     from pymdmix.analysis.energy import density_to_free_energy
     from pymdmix.core.grid import Grid
-    
+
     grid = Grid.read_dx(ingrid)
     energy = density_to_free_energy(grid, temperature=temperature)
     energy.write_dx(output)
-    
+
     click.secho(f"✓ Converted to free energy: {output}", fg="green")
 
 
@@ -1285,12 +1490,14 @@ def tools_grid_info(grid_file: str) -> None:
         pymdmix tools grid-info energy.dx
     """
     from pymdmix.core.grid import Grid
-    
+
     grid = Grid.read_dx(grid_file)
-    
+
     click.echo(f"File: {grid_file}")
     click.echo(f"  Dimensions: {grid.shape[0]} x {grid.shape[1]} x {grid.shape[2]}")
-    click.echo(f"  Spacing: {grid.spacing[0]:.2f} x {grid.spacing[1]:.2f} x {grid.spacing[2]:.2f} Å")
+    click.echo(
+        f"  Spacing: {grid.spacing[0]:.2f} x {grid.spacing[1]:.2f} x {grid.spacing[2]:.2f} Å"
+    )
     click.echo(f"  Origin: ({grid.origin[0]:.2f}, {grid.origin[1]:.2f}, {grid.origin[2]:.2f})")
     click.echo(f"  Value range: [{grid.data.min():.3f}, {grid.data.max():.3f}]")
 
@@ -1309,14 +1516,15 @@ def tools_grid_math(operation: str, inputs: tuple, output: str, factor: float) -
         pymdmix tools grid-math scale grid.dx -f 0.5 -o scaled.dx
     """
     import numpy as np
+
     from pymdmix.core.grid import Grid
-    
+
     if not inputs:
         click.secho("✗ At least one input file required", fg="red")
         sys.exit(1)
-    
+
     grids = [Grid.read_dx(f) for f in inputs]
-    
+
     if operation == "add":
         data = sum(g.data for g in grids)
     elif operation == "sub":
@@ -1332,7 +1540,7 @@ def tools_grid_math(operation: str, inputs: tuple, output: str, factor: float) -
     else:
         click.secho(f"✗ Unknown operation: {operation}", fg="red")
         sys.exit(1)
-    
+
     result = Grid(data=data, origin=grids[0].origin, spacing=grids[0].spacing)
     result.write_dx(output)
     click.secho(f"✓ Saved: {output}", fg="green")
@@ -1341,16 +1549,20 @@ def tools_grid_math(operation: str, inputs: tuple, output: str, factor: float) -
 @tools.command("convert")
 @click.argument("input_file", type=click.Path(exists=True))
 @click.option("-o", "--output", required=True, help="Output file")
-@click.option("--format", "fmt", type=click.Choice(["dx", "mrc", "ccp4", "cube"]),
-              help="Output format (auto-detected from extension)")
-def tools_convert(input_file: str, output: str, fmt: Optional[str]) -> None:
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["dx", "mrc", "ccp4", "cube"]),
+    help="Output format (auto-detected from extension)",
+)
+def tools_convert(input_file: str, output: str, fmt: str | None) -> None:
     """Convert grid between formats.
 
     Examples:
         pymdmix tools convert energy.dx -o energy.mrc
     """
     from pymdmix.io.grids import convert_grid
-    
+
     convert_grid(input_file, output, format=fmt)
     click.secho(f"✓ Converted: {input_file} → {output}", fg="green")
 
@@ -1366,11 +1578,11 @@ def tools_combine_hotspots(inputs: tuple, output: str, distance: float) -> None:
         pymdmix tools combine-hotspots rep1/hotspots.pdb rep2/hotspots.pdb -o combined.pdb
     """
     from pymdmix.analysis.hotspots import merge_hotspot_files
-    
+
     if len(inputs) < 2:
         click.secho("✗ At least two input files required", fg="red")
         sys.exit(1)
-    
+
     merge_hotspot_files(list(inputs), output, distance_cutoff=distance)
     click.secho(f"✓ Combined {len(inputs)} files → {output}", fg="green")
 
@@ -1378,6 +1590,7 @@ def tools_combine_hotspots(inputs: tuple, output: str, distance: float) -> None:
 # =============================================================================
 # Entry Point
 # =============================================================================
+
 
 def main() -> None:
     """Entry point for the CLI."""

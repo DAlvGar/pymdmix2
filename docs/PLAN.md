@@ -88,12 +88,12 @@ from MDAnalysis.analysis import align
 
 def align_structures(
     mobile: parmed.Structure,
-    reference: parmed.Structure, 
+    reference: parmed.Structure,
     mask: np.ndarray | None = None
 ) -> tuple[parmed.Structure, float]:
     """
     Superimpose mobile onto reference (Kabsch algorithm).
-    
+
     Returns aligned structure and RMSD.
     Uses MDAnalysis internally for robust fitting.
     """
@@ -302,14 +302,14 @@ Implemented with:
 class HotSpotSet:
     """Collection of hotspots with clustering."""
     hotspots: list[Hotspot]
-    
+
     def cluster(self, cutoff: float = 2.5) -> list[HotSpotCluster]:
         # scipy.cluster.hierarchy
         ...
-    
+
     def prune_by_energy(self, max_energy: float):
         ...
-    
+
     def prune_by_volume(self, min_volume: float):
         ...
 ```
@@ -363,21 +363,21 @@ def align_structures(
 ) -> tuple[parmed.Structure, float]:
     """
     Superimpose mobile structure onto reference (Kabsch algorithm).
-    
+
     Parameters
     ----------
     mobile : parmed.Structure
         Structure to align (will be modified in place)
-    reference : parmed.Structure  
+    reference : parmed.Structure
         Reference structure
     mask : NDArray[np.bool_] | None
         Atoms to use for fitting. If None, use all atoms.
-        
+
     Returns
     -------
     tuple[parmed.Structure, float]
         Aligned structure and RMSD
-        
+
     Notes
     -----
     Uses MDAnalysis internally for robust Kabsch superposition.
@@ -388,7 +388,7 @@ def align_structures(
         from MDAnalysis.analysis import align as mda_align
     except ImportError:
         raise ImportError("MDAnalysis required for alignment: pip install MDAnalysis")
-    
+
     # Create temporary MDAnalysis universes
     # ... implementation using mda_align.alignto()
 ```
@@ -423,22 +423,22 @@ def residue_to_atom_values(struct: parmed.Structure, res_values: Sequence) -> ND
 
 ```python
 def detect_solvent_type(
-    struct: parmed.Structure, 
+    struct: parmed.Structure,
     known_solvents: dict[str, list[str]]
 ) -> str | None:
     """Auto-detect solvent mixture from residue composition."""
     # Get organic solvent residues (not water, not ions, not protein/NA)
     organic_mask = ~(get_water_mask(struct) | get_ion_mask(struct) | get_solute_mask(struct))
     resnames = set(a.residue.name for i, a in enumerate(struct.atoms) if organic_mask[i])
-    
+
     for solvent_name, residue_names in known_solvents.items():
         if resnames == set(residue_names):
             return solvent_name
     return None
 
 def get_probe_coords(
-    struct: parmed.Structure, 
-    residue_name: str, 
+    struct: parmed.Structure,
+    residue_name: str,
     atom_names: list[str]
 ) -> NDArray[np.float64]:
     """Extract coordinates of probe atoms for density analysis."""
@@ -477,7 +477,7 @@ def generate_ss_leap_commands(
 ) -> list[str]:
     """
     Generate tleap commands for disulfide bonds.
-    
+
     Equivalent to Biskit AmberParmBuilder.__fLines(ss_bond, ss)
     """
     commands = []

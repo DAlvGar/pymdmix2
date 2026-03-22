@@ -2,24 +2,21 @@
 Tests for pymdmix.core.system module.
 """
 
-import pytest
-import pickle
-import tempfile
-import os
 from pathlib import Path
 
+import pytest
+
 from pymdmix.core.system import (
-    System,
-    SolvatedSystem,
-    SystemError,
     BadFileError,
     FileLock,
+    SolvatedSystem,
+    System,
+    SystemError,
     load_system,
 )
 
-
 # Sample OFF content for testing
-SAMPLE_OFF = '''!!index array str
+SAMPLE_OFF = """!!index array str
  "TST"
 !entry.TST.unit.atoms table  str name  str type  int typex  int reession  int residuePdbSequenceNumber  int flags  int sequence  int elmnt  dbl charge
  "C1" "CT" 0 1 1 131072 1 6 -0.1824
@@ -58,24 +55,24 @@ SAMPLE_OFF = '''!!index array str
  0.0 0.0 0.0
  0.0 0.0 0.0
  0.0 0.0 0.0
-'''
+"""
 
 # Sample topology content (minimal)
-SAMPLE_PRMTOP = '''%VERSION  VERSION_STAMP = V0001.000  DATE = 01/01/24  00:00:00
+SAMPLE_PRMTOP = """%VERSION  VERSION_STAMP = V0001.000  DATE = 01/01/24  00:00:00
 %FLAG TITLE
 %FORMAT(20a4)
 TEST TOPOLOGY
 %FLAG POINTERS
 %FORMAT(10I8)
        3       2       0       0       0       0       0       0       0       0
-'''
+"""
 
 # Sample coordinate content (minimal)
-SAMPLE_PRMCRD = '''TEST
+SAMPLE_PRMCRD = """TEST
     3
   0.0000000   0.0000000   0.0000000   1.5000000   0.0000000   0.0000000
   2.5000000   1.0000000   0.0000000
-'''
+"""
 
 
 class TestFileLock:

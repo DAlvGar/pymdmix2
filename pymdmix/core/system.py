@@ -38,21 +38,23 @@ log = logging.getLogger(__name__)
 
 class SystemError(Exception):
     """Base exception for System errors."""
+
     pass
 
 
 class BadFileError(SystemError):
     """Raised when a required file is not found or invalid."""
+
     pass
 
 
 class FileLock:
     """
     File locking mechanism with context manager support.
-    
+
     Cross-platform compatible file locking that doesn't rely on
     platform-specific fcntl or msvcrt.
-    
+
     Parameters
     ----------
     file_name : str | Path
@@ -74,13 +76,14 @@ class FileLock:
     def acquire(self) -> None:
         """
         Acquire the lock.
-        
+
         Raises
         ------
         SystemError
             If lock cannot be acquired within timeout
         """
         import errno
+
         start_time = time.time()
         while True:
             try:
@@ -121,12 +124,12 @@ class FileLock:
 class System:
     """
     Represents a macromolecular system ready for MD preparation.
-    
+
     A System can be initialized from:
     - An Amber Object File (OFF/lib) with parameterized unit
     - An Amber-ready PDB file
     - A saved System pickle file
-    
+
     Attributes
     ----------
     name : str
@@ -142,6 +145,7 @@ class System:
     ref : Any
         Reference PDB structure
     """
+
     name: str = ""
     ff: list[str] = field(default_factory=list)
     extra_res_list: list[str] = field(default_factory=list)
@@ -155,25 +159,24 @@ class System:
         """Initialize with default name if not provided."""
         if not self.name:
             # Generate random string
-            rand_str = ''.join(
-                random.choice(string.ascii_uppercase + string.digits)
-                for _ in range(3)
+            rand_str = "".join(
+                random.choice(string.ascii_uppercase + string.digits) for _ in range(3)
             )
-            self.name = f'mdmix_system_{rand_str}'
-        
+            self.name = f"mdmix_system_{rand_str}"
+
         if not self.sys_file_path:
-            self.sys_file_path = f'{self.name}.msys'
+            self.sys_file_path = f"{self.name}.msys"
 
     @classmethod
     def from_file(cls, path: str | Path) -> System:
         """
         Load a System from a saved pickle file.
-        
+
         Parameters
         ----------
         path : str | Path
             Path to .msys file
-            
+
         Returns
         -------
         System
@@ -194,7 +197,7 @@ class System:
     ) -> System:
         """
         Create a System from an Amber Object File.
-        
+
         Parameters
         ----------
         off_path : str | Path
@@ -207,7 +210,7 @@ class System:
             Force field names/files
         extra_res_list : list[str] | None
             Non-standard residue names
-            
+
         Returns
         -------
         System
@@ -232,9 +235,9 @@ class System:
     ) -> System:
         """
         Create a System from an Amber-ready PDB file.
-        
+
         The PDB will be processed and converted to an OFF file.
-        
+
         Parameters
         ----------
         pdb_path : str | Path
@@ -247,7 +250,7 @@ class System:
             Non-standard residue names
         **kwargs
             Additional arguments for PDB cleaning
-            
+
         Returns
         -------
         System
@@ -261,16 +264,18 @@ class System:
         system.set_amber_pdb(pdb_path, **kwargs)
         return system
 
-    def set_amber_pdb(self, pdb_path: str | Path, ff: list[str] | None = None, **kwargs: Any) -> None:
+    def set_amber_pdb(
+        self, pdb_path: str | Path, ff: list[str] | None = None, **kwargs: Any
+    ) -> None:
         """
         Set up system from an Amber-ready PDB file.
-        
+
         The PDB will be processed with cleaning steps:
         - Cap N and C terminus
         - Rename HIS residues according to protonation
         - Rename CYS to CYX if needed
         - Remove hydrogens for tLeap to add back
-        
+
         Parameters
         ----------
         pdb_path : str | Path
@@ -288,16 +293,16 @@ class System:
 
         # Initialize Amber creation system
         self._init_create()
-        
+
         # Create OFF from PDB
-        out_off = f'{self.name}.lib'
+        out_off = f"{self.name}.lib"
         self._create.create_off(self.name, str(pdb_path), extra_ff=ff, **kwargs)
-        self.set_off(out_off, 'sys')
+        self.set_off(out_off, "sys")
 
     def set_off(self, off_path: str | Path, unit_name: str | None = None) -> None:
         """
         Load an Amber Object File (OFF/lib).
-        
+
         Parameters
         ----------
         off_path : str | Path
@@ -308,22 +313,22 @@ class System:
         from pymdmix.io.off_manager import OFFManager
 
         off_path = Path(off_path)
-        
+
         # Handle special test case
-        if str(off_path).lower() == 'test':
+        if str(off_path).lower() == "test":
             log.info("WORKING WITH A TEST SYSTEM!")
             # Would load from test directory
-            self.name = 'testsystem'
-            self.sys_file_path = f'{self.name}.msys'
+            self.name = "testsystem"
+            self.sys_file_path = f"{self.name}.msys"
             return
 
         self.off_manager = OFFManager.from_file(off_path)
-        
+
         if unit_name is None:
             units = self.off_manager.get_units()
             if units:
                 unit_name = units[0]
-        
+
         self.unit_name = unit_name
         self._create_ref()
 
@@ -335,7 +340,7 @@ class System:
     ) -> SolvatedSystem:
         """
         Solvate the system with a solvent mixture.
-        
+
         Parameters
         ----------
         solvent : str | Solvent
@@ -344,12 +349,12 @@ class System:
             Suffix for output files
         tmp : bool | str
             If True, work in temp directory; if str, use as path
-            
+
         Returns
         -------
         SolvatedSystem
             Solvated system instance
-            
+
         Raises
         ------
         SystemError
@@ -360,7 +365,7 @@ class System:
 
         # Get solvent instance
         from pymdmix.core.solvent import SolventLibrary
-        
+
         if isinstance(solvent, str):
             library = SolventLibrary()
             solvent_obj = library.get(solvent)
@@ -374,9 +379,9 @@ class System:
         log.info(f"Solvating {self.name} with solvent mixture {solvent_name}")
 
         suffix = suffix or solvent_name
-        name = f'{self.name}_{suffix}'
-        prmtop = f'{name}.prmtop'
-        prmcrd = f'{name}.prmcrd'
+        name = f"{self.name}_{suffix}"
+        prmtop = f"{name}.prmtop"
+        prmcrd = f"{name}.prmcrd"
 
         # Determine working path
         if tmp:
@@ -406,12 +411,12 @@ class System:
     def write_off(self, fname: str | Path) -> Path | None:
         """
         Write Object File to disk.
-        
+
         Parameters
         ----------
         fname : str | Path
             Output file name
-            
+
         Returns
         -------
         Path | None
@@ -427,8 +432,9 @@ class System:
             # Import here to avoid circular dependency
             try:
                 from pymdmix.engines.amber import AmberCreateSystem
+
                 self._create = AmberCreateSystem(ff_list=self.ff, informative=False)
-                
+
                 if self.off_manager:
                     tmp_off = self.off_manager.write_tmp()
                     self._create.load_off(str(tmp_off))
@@ -440,7 +446,7 @@ class System:
     def _clean_create(self) -> None:
         """Clean up AmberCreateSystem resources."""
         if self._create is not None:
-            if hasattr(self._create, 'leap'):
+            if hasattr(self._create, "leap"):
                 self._create.leap.close()
             self._create = None
 
@@ -448,98 +454,100 @@ class System:
         """Create reference PDB from OFF file."""
         # Initialize creation system
         self._init_create()
-        
+
         if self._create is None:
             log.warning("Cannot create reference PDB - AmberCreateSystem not available")
             return
 
         try:
             # Save temporary topology and coordinates
-            self._create.save_amber_parm(self.unit_name, 'tmp.top', 'tmp.crd')
-            self._create.ambpdb('tmp.top', 'tmp.crd', 'tmp.pdb')
-            
+            self._create.save_amber_parm(self.unit_name, "tmp.top", "tmp.crd")
+            self._create.ambpdb("tmp.top", "tmp.crd", "tmp.pdb")
+
             # Load reference PDB
             try:
                 import MDAnalysis as mda
-                self.ref = mda.Universe('tmp.pdb')
+
+                self.ref = mda.Universe("tmp.pdb")
             except ImportError:
                 # Fallback: just store path
-                self.ref = Path('tmp.pdb').read_text()
-            
+                self.ref = Path("tmp.pdb").read_text()
+
             # Clean up temp files
-            for ext in ('top', 'crd', 'pdb'):
-                Path(f'tmp.{ext}').unlink(missing_ok=True)
+            for ext in ("top", "crd", "pdb"):
+                Path(f"tmp.{ext}").unlink(missing_ok=True)
         finally:
             self._clean_create()
 
     def copy(self) -> System:
         """
         Create a deep copy of the system.
-        
+
         Returns
         -------
         System
             Copy of the system
         """
         import copy
+
         return copy.deepcopy(self)
 
     def write(self, outfile: str | Path | None = None) -> None:
         """
         Save system to a pickle file.
-        
+
         Parameters
         ----------
         outfile : str | Path | None
             Output file path (defaults to sys_file_path)
         """
         outfile = Path(outfile or self.sys_file_path)
-        
+
         with FileLock(str(outfile)) as _:
             # Prepare data for pickling
             data = {
-                'name': self.name,
-                'ff': self.ff,
-                'extra_res_list': self.extra_res_list,
-                'off_content': self.off_manager.content if self.off_manager else None,
-                'unit_name': self.unit_name,
-                'ref': self.ref,
-                'sys_file_path': str(outfile.absolute()),
+                "name": self.name,
+                "ff": self.ff,
+                "extra_res_list": self.extra_res_list,
+                "off_content": self.off_manager.content if self.off_manager else None,
+                "unit_name": self.unit_name,
+                "ref": self.ref,
+                "sys_file_path": str(outfile.absolute()),
             }
-            
-            with open(outfile, 'wb') as f:
+
+            with open(outfile, "wb") as f:
                 pickle.dump(data, f)
-        
+
         self.sys_file_path = str(outfile.absolute())
 
     def load(self, sysfile: str | Path | None = None) -> None:
         """
         Load system from a pickle file.
-        
+
         Parameters
         ----------
         sysfile : str | Path | None
             File to load (defaults to sys_file_path)
         """
         from pymdmix.io.off_manager import OFFManager
-        
+
         sysfile = Path(sysfile or self.sys_file_path)
         if not sysfile.exists():
             raise BadFileError(f"File {sysfile} not found")
 
         with FileLock(str(sysfile)) as _:
-            with open(sysfile, 'rb') as f:
+            with open(sysfile, "rb") as f:
                 data = pickle.load(f)
 
-        self.name = data['name']
-        self.ff = data.get('ff', [])
-        self.extra_res_list = data.get('extra_res_list', [])
-        self.unit_name = data.get('unit_name')
-        self.ref = data.get('ref')
-        self.sys_file_path = data.get('sys_file_path', str(sysfile))
-        
+        self.name = data["name"]
+        self.ff = data.get("ff", [])
+        self.extra_res_list = data.get("extra_res_list", [])
+        self.unit_name = data.get("unit_name")
+        self.ref = data.get("ref")
+        self.sys_file_path = data.get("sys_file_path", str(sysfile))
+
         # Restore OFF manager
-        off_content = data.get('off_content')
+        off_content = data.get("off_content")
         if off_content:
             self.off_manager = OFFManager.from_string(off_content)
 
@@ -552,16 +560,16 @@ class System:
             lines.append(f"  FF: {self.ff}")
         if self.extra_res_list:
             lines.append(f"  ExtraRes: {self.extra_res_list}")
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
 
 @dataclass
 class SolvatedSystem(System):
     """
     Represents a solvated system with topology and coordinates.
-    
+
     Subclass of System containing PRMTOP/PRMCRD files.
-    
+
     Attributes
     ----------
     top : str | None
@@ -573,6 +581,7 @@ class SolvatedSystem(System):
     solvent : str | None
         Solvent used for solvation
     """
+
     top: str | None = None
     crd: str | None = None
     pdb: str | None = None
@@ -584,7 +593,7 @@ class SolvatedSystem(System):
     def __post_init__(self):
         """Initialize parent and set topology files if paths provided."""
         super().__post_init__()
-        
+
         # If top/crd are paths, load them
         if self.top and Path(self.top).exists():
             self.set_top_crd(self.top, self.crd)
@@ -601,7 +610,7 @@ class SolvatedSystem(System):
     ) -> SolvatedSystem:
         """
         Create a SolvatedSystem from PRMTOP and PRMCRD files.
-        
+
         Parameters
         ----------
         name : str
@@ -616,7 +625,7 @@ class SolvatedSystem(System):
             Reference structure
         **kwargs
             Additional arguments passed to constructor
-            
+
         Returns
         -------
         SolvatedSystem
@@ -629,7 +638,7 @@ class SolvatedSystem(System):
     def set_top_crd(self, top: str | Path, crd: str | Path) -> None:
         """
         Set PRMTOP and PRMCRD for the system.
-        
+
         Parameters
         ----------
         top : str | Path
@@ -639,7 +648,7 @@ class SolvatedSystem(System):
         """
         top_path = Path(top)
         crd_path = Path(crd)
-        
+
         if not top_path.exists():
             raise BadFileError(f"File {top_path} not found")
         if not crd_path.exists():
@@ -656,12 +665,12 @@ class SolvatedSystem(System):
     def save_top_crd(self, prefix: str | Path) -> bool:
         """
         Save topology and coordinates to disk files.
-        
+
         Parameters
         ----------
         prefix : str | Path
             Prefix for output files (.prmtop and .prmcrd extensions added)
-            
+
         Returns
         -------
         bool
@@ -669,23 +678,20 @@ class SolvatedSystem(System):
         """
         if self.top and self.crd:
             prefix = Path(prefix)
-            prefix.with_suffix('.prmtop').write_text(self.top)
-            prefix.with_suffix('.prmcrd').write_text(self.crd)
-            return (
-                prefix.with_suffix('.prmtop').exists() and
-                prefix.with_suffix('.prmcrd').exists()
-            )
+            prefix.with_suffix(".prmtop").write_text(self.top)
+            prefix.with_suffix(".prmcrd").write_text(self.crd)
+            return prefix.with_suffix(".prmtop").exists() and prefix.with_suffix(".prmcrd").exists()
         return False
 
     def save_pdb(self, fname: str | Path) -> bool:
         """
         Save PDB to a file.
-        
+
         Parameters
         ----------
         fname : str | Path
             Output file name
-            
+
         Returns
         -------
         bool
@@ -699,7 +705,7 @@ class SolvatedSystem(System):
     def get_solvated_pdb(self) -> Any:
         """
         Get a SolvatedPDB object from the PDB content.
-        
+
         Returns
         -------
         Any
@@ -707,6 +713,7 @@ class SolvatedSystem(System):
         """
         try:
             from pymdmix.core.structure import SolvatedPDB
+
             pdb_path = self.get_tmp_pdb_file()
             result = SolvatedPDB(pdb_path, self.extra_res_list)
             self.clean_tmp()
@@ -718,21 +725,21 @@ class SolvatedSystem(System):
     def get_solvated_pdb_solute(self) -> Any:
         """
         Get the solute (non-solvent) portion of the solvated system.
-        
+
         Returns
         -------
         Any
             Solute structure
         """
         solvated = self.get_solvated_pdb()
-        if solvated and hasattr(solvated, 'get_solute'):
+        if solvated and hasattr(solvated, "get_solute"):
             return solvated.get_solute()
         return None
 
     def get_tmp_top_crd_files(self) -> tuple[Path, Path] | None:
         """
         Save topology and coordinates to temporary files.
-        
+
         Returns
         -------
         tuple[Path, Path] | None
@@ -740,11 +747,11 @@ class SolvatedSystem(System):
         """
         if not self.top or not self.crd:
             return None
-            
+
         tmp = tempfile.mktemp()
-        self._tmp_top = Path(f'{tmp}.prmtop')
-        self._tmp_crd = Path(f'{tmp}.prmcrd')
-        
+        self._tmp_top = Path(f"{tmp}.prmtop")
+        self._tmp_crd = Path(f"{tmp}.prmcrd")
+
         if self.save_top_crd(tmp):
             return self._tmp_top, self._tmp_crd
         return None
@@ -752,16 +759,16 @@ class SolvatedSystem(System):
     def get_tmp_pdb_file(self) -> Path | None:
         """
         Save PDB to a temporary file.
-        
+
         Returns
         -------
         Path | None
             Path to temporary PDB file
         """
         if self.pdb:
-            fd, tmp = tempfile.mkstemp(suffix='.pdb')
+            fd, tmp = tempfile.mkstemp(suffix=".pdb")
             self._tmp_pdb = Path(tmp)
-            with open(fd, 'w') as f:
+            with open(fd, "w") as f:
                 f.write(self.pdb)
             return self._tmp_pdb
         return None
@@ -780,18 +787,19 @@ class SolvatedSystem(System):
         tmp_files = self.get_tmp_top_crd_files()
         if tmp_files is None:
             return
-            
+
         tmp_top, tmp_crd = tmp_files
-        fd, tmp_pdb_path = tempfile.mkstemp(suffix='.pdb')
+        fd, tmp_pdb_path = tempfile.mkstemp(suffix=".pdb")
         os.close(fd)
         self._tmp_pdb = Path(tmp_pdb_path)
 
         try:
             from pymdmix.engines.amber import AmberCreateSystem
+
             create = AmberCreateSystem(informative=False)
             create.ambpdb(str(tmp_top), str(tmp_crd), str(self._tmp_pdb))
             time.sleep(1)  # Allow ambpdb to complete
-            
+
             if self._tmp_pdb.exists():
                 self.pdb = self._tmp_pdb.read_text()
         except ImportError:
@@ -810,37 +818,34 @@ class SolvatedSystem(System):
 def load_system(systemfile: str | Path | None = None) -> System:
     """
     Load an existing system from file.
-    
+
     If no path is given, searches for a .msys file in the current directory.
-    
+
     Parameters
     ----------
     systemfile : str | Path | None
         Path to system file
-        
+
     Returns
     -------
     System
         Loaded system
-        
+
     Raises
     ------
     SystemError
         If multiple or no system files found
     """
     import glob
-    
+
     if systemfile is None:
-        files = glob.glob('*.msys')
+        files = glob.glob("*.msys")
         if len(files) > 1:
             raise SystemError(
-                "Multiple system files in current folder. "
-                "Please specify which file to load."
+                "Multiple system files in current folder. Please specify which file to load."
             )
         if not files:
-            raise SystemError(
-                "No .msys file found in current folder and no path given."
-            )
+            raise SystemError("No .msys file found in current folder and no path given.")
         systemfile = files[0]
 
     return System.from_file(systemfile)

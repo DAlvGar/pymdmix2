@@ -14,62 +14,145 @@ Examples
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Sequence
 import logging
-import numpy as np
-from numpy.typing import NDArray
+from collections.abc import Sequence
+from pathlib import Path
 
+import numpy as np
 import parmed
+from numpy.typing import NDArray
 
 log = logging.getLogger(__name__)
 
 # Standard residue sets for masking
-PROTEIN_RESIDUES = frozenset({
-    # Standard amino acids
-    'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY',
-    'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER',
-    'THR', 'TRP', 'TYR', 'VAL',
-    # Amber protonation states
-    'CYX', 'CYM',  # Cysteine variants
-    'HID', 'HIE', 'HIP',  # Histidine variants
-    'ASH', 'GLH',  # Protonated Asp/Glu
-    'LYN',  # Neutral lysine
-    # Caps
-    'ACE', 'NME', 'NHE',
-})
+PROTEIN_RESIDUES = frozenset(
+    {
+        # Standard amino acids
+        "ALA",
+        "ARG",
+        "ASN",
+        "ASP",
+        "CYS",
+        "GLN",
+        "GLU",
+        "GLY",
+        "HIS",
+        "ILE",
+        "LEU",
+        "LYS",
+        "MET",
+        "PHE",
+        "PRO",
+        "SER",
+        "THR",
+        "TRP",
+        "TYR",
+        "VAL",
+        # Amber protonation states
+        "CYX",
+        "CYM",  # Cysteine variants
+        "HID",
+        "HIE",
+        "HIP",  # Histidine variants
+        "ASH",
+        "GLH",  # Protonated Asp/Glu
+        "LYN",  # Neutral lysine
+        # Caps
+        "ACE",
+        "NME",
+        "NHE",
+    }
+)
 
-WATER_RESIDUES = frozenset({
-    'WAT', 'HOH', 'TIP3', 'TIP4', 'TIP5', 'SPC', 'SPCE',
-    'T3P', 'T4P', 'T4E', 'T5P', 'OPC', 'OPC3',
-})
+WATER_RESIDUES = frozenset(
+    {
+        "WAT",
+        "HOH",
+        "TIP3",
+        "TIP4",
+        "TIP5",
+        "SPC",
+        "SPCE",
+        "T3P",
+        "T4P",
+        "T4E",
+        "T5P",
+        "OPC",
+        "OPC3",
+    }
+)
 
-DNA_RESIDUES = frozenset({
-    'DA', 'DT', 'DG', 'DC', 'DU',
-    'DA5', 'DA3', 'DAN',
-    'DT5', 'DT3', 'DTN',
-    'DG5', 'DG3', 'DGN',
-    'DC5', 'DC3', 'DCN',
-})
+DNA_RESIDUES = frozenset(
+    {
+        "DA",
+        "DT",
+        "DG",
+        "DC",
+        "DU",
+        "DA5",
+        "DA3",
+        "DAN",
+        "DT5",
+        "DT3",
+        "DTN",
+        "DG5",
+        "DG3",
+        "DGN",
+        "DC5",
+        "DC3",
+        "DCN",
+    }
+)
 
-RNA_RESIDUES = frozenset({
-    'A', 'U', 'G', 'C',
-    'RA', 'RU', 'RG', 'RC',
-    'A5', 'A3', 'AN',
-    'U5', 'U3', 'UN',
-    'G5', 'G3', 'GN',
-    'C5', 'C3', 'CN',
-})
+RNA_RESIDUES = frozenset(
+    {
+        "A",
+        "U",
+        "G",
+        "C",
+        "RA",
+        "RU",
+        "RG",
+        "RC",
+        "A5",
+        "A3",
+        "AN",
+        "U5",
+        "U3",
+        "UN",
+        "G5",
+        "G3",
+        "GN",
+        "C5",
+        "C3",
+        "CN",
+    }
+)
 
-ION_RESIDUES = frozenset({
-    'Na+', 'NA', 'SOD',
-    'K+', 'K', 'POT',
-    'Cl-', 'CL', 'CLA',
-    'Mg2+', 'MG', 'MG2',
-    'Ca2+', 'CA', 'CAL',
-    'Zn2+', 'ZN',
-    'Fe2+', 'FE', 'FE2',
-})
+ION_RESIDUES = frozenset(
+    {
+        "Na+",
+        "NA",
+        "SOD",
+        "K+",
+        "K",
+        "POT",
+        "Cl-",
+        "CL",
+        "CLA",
+        "Mg2+",
+        "MG",
+        "MG2",
+        "Ca2+",
+        "CA",
+        "CAL",
+        "Zn2+",
+        "ZN",
+        "Fe2+",
+        "FE",
+        "FE2",
+    }
+)
 
 
 def load_structure(path: str | Path) -> parmed.Structure:
@@ -140,10 +223,7 @@ def get_protein_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
     NDArray[np.bool_]
         Boolean mask (True for protein atoms)
     """
-    return np.array([
-        a.residue.name in PROTEIN_RESIDUES
-        for a in struct.atoms
-    ])
+    return np.array([a.residue.name in PROTEIN_RESIDUES for a in struct.atoms])
 
 
 def get_water_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
@@ -160,10 +240,7 @@ def get_water_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
     NDArray[np.bool_]
         Boolean mask (True for water atoms)
     """
-    return np.array([
-        a.residue.name in WATER_RESIDUES
-        for a in struct.atoms
-    ])
+    return np.array([a.residue.name in WATER_RESIDUES for a in struct.atoms])
 
 
 def get_nucleic_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
@@ -181,10 +258,7 @@ def get_nucleic_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
         Boolean mask (True for nucleic acid atoms)
     """
     nucleic = DNA_RESIDUES | RNA_RESIDUES
-    return np.array([
-        a.residue.name in nucleic
-        for a in struct.atoms
-    ])
+    return np.array([a.residue.name in nucleic for a in struct.atoms])
 
 
 def get_ion_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
@@ -201,10 +275,7 @@ def get_ion_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
     NDArray[np.bool_]
         Boolean mask (True for ion atoms)
     """
-    return np.array([
-        a.residue.name in ION_RESIDUES
-        for a in struct.atoms
-    ])
+    return np.array([a.residue.name in ION_RESIDUES for a in struct.atoms])
 
 
 def get_solute_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
@@ -265,10 +336,7 @@ def get_residue_mask(
     else:
         resnames = set(resnames)
 
-    return np.array([
-        a.residue.name in resnames
-        for a in struct.atoms
-    ])
+    return np.array([a.residue.name in resnames for a in struct.atoms])
 
 
 def get_atom_mask(
@@ -295,10 +363,7 @@ def get_atom_mask(
     else:
         atom_names = set(atom_names)
 
-    return np.array([
-        a.name in atom_names
-        for a in struct.atoms
-    ])
+    return np.array([a.name in atom_names for a in struct.atoms])
 
 
 def get_heavy_atom_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
@@ -315,10 +380,7 @@ def get_heavy_atom_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
     NDArray[np.bool_]
         Boolean mask (True for heavy atoms)
     """
-    return np.array([
-        a.atomic_number > 1
-        for a in struct.atoms
-    ])
+    return np.array([a.atomic_number > 1 for a in struct.atoms])
 
 
 def get_hydrogen_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
@@ -337,14 +399,11 @@ def get_hydrogen_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
     NDArray[np.bool_]
         Boolean mask (True for hydrogen atoms)
     """
-    return np.array([
-        a.atomic_number == 1
-        for a in struct.atoms
-    ])
+    return np.array([a.atomic_number == 1 for a in struct.atoms])
 
 
 # Backbone atom names for proteins
-BACKBONE_ATOMS = frozenset({'N', 'CA', 'C', 'O'})
+BACKBONE_ATOMS = frozenset({"N", "CA", "C", "O"})
 
 
 def get_backbone_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
@@ -363,10 +422,9 @@ def get_backbone_mask(struct: parmed.Structure) -> NDArray[np.bool_]:
     NDArray[np.bool_]
         Boolean mask (True for backbone atoms)
     """
-    return np.array([
-        a.residue.name in PROTEIN_RESIDUES and a.name in BACKBONE_ATOMS
-        for a in struct.atoms
-    ])
+    return np.array(
+        [a.residue.name in PROTEIN_RESIDUES and a.name in BACKBONE_ATOMS for a in struct.atoms]
+    )
 
 
 def select_atoms(
@@ -426,8 +484,9 @@ def find_disulfides(
     """
     # Find CYS/CYX SG atoms
     sg_atoms = [
-        (i, a) for i, a in enumerate(struct.atoms)
-        if a.residue.name in ('CYS', 'CYX') and a.name == 'SG'
+        (i, a)
+        for i, a in enumerate(struct.atoms)
+        if a.residue.name in ("CYS", "CYX") and a.name == "SG"
     ]
 
     if len(sg_atoms) < 2:
@@ -437,7 +496,7 @@ def find_disulfides(
     coords = struct.coordinates
 
     for i, (idx1, a1) in enumerate(sg_atoms):
-        for idx2, a2 in sg_atoms[i+1:]:
+        for idx2, a2 in sg_atoms[i + 1 :]:
             dist = np.linalg.norm(coords[idx1] - coords[idx2])
             if dist < cutoff:
                 disulfides.append((a1.residue.idx, a2.residue.idx))
@@ -471,8 +530,8 @@ def rename_cys_to_cyx(
 
     # Rename
     for residue in struct.residues:
-        if residue.idx in ss_residues and residue.name == 'CYS':
-            residue.name = 'CYX'
+        if residue.idx in ss_residues and residue.name == "CYS":
+            residue.name = "CYX"
             log.debug(f"Renamed residue {residue.idx} from CYS to CYX")
 
 
@@ -542,10 +601,7 @@ def select_chains(
     else:
         chain_set = set(chain_ids)
 
-    mask = np.array([
-        a.residue.chain in chain_set
-        for a in struct.atoms
-    ])
+    mask = np.array([a.residue.chain in chain_set for a in struct.atoms])
     return select_atoms(struct, mask)
 
 
@@ -564,12 +620,14 @@ def count_residues(struct: parmed.Structure) -> dict[str, int]:
         Residue name -> count mapping
     """
     from collections import Counter
+
     return dict(Counter(r.name for r in struct.residues))
 
 
 # =============================================================================
 # Profile Conversions (Biskit atom2resProfile / res2atomProfile equivalents)
 # =============================================================================
+
 
 def atom_to_residue_values(
     struct: parmed.Structure,
@@ -650,6 +708,7 @@ def residue_to_atom_values(
 # =============================================================================
 # Probe/Density Helpers (for trajectory analysis)
 # =============================================================================
+
 
 def get_probe_coords(
     struct: parmed.Structure,
@@ -790,10 +849,7 @@ def detect_solvent_type(
     ions = get_ion_mask(struct)
 
     organic_mask = ~(solute | water | ions)
-    organic_resnames = set(
-        a.residue.name for i, a in enumerate(struct.atoms)
-        if organic_mask[i]
-    )
+    organic_resnames = set(a.residue.name for i, a in enumerate(struct.atoms) if organic_mask[i])
 
     # Match against known solvents
     for solvent_name, residue_names in known_solvents.items():
@@ -808,6 +864,7 @@ def detect_solvent_type(
 # =============================================================================
 # Structure Alignment (Biskit magicFit equivalent)
 # =============================================================================
+
 
 def _kabsch_rotation(P: NDArray, Q: NDArray) -> NDArray:
     """
@@ -861,12 +918,10 @@ def compute_rmsd(
         RMSD in same units as input (typically Angstroms)
     """
     if coords1.shape != coords2.shape:
-        raise ValueError(
-            f"Shape mismatch: {coords1.shape} vs {coords2.shape}"
-        )
+        raise ValueError(f"Shape mismatch: {coords1.shape} vs {coords2.shape}")
 
     diff = coords1 - coords2
-    return float(np.sqrt(np.mean(np.sum(diff ** 2, axis=1))))
+    return float(np.sqrt(np.mean(np.sum(diff**2, axis=1))))
 
 
 def align_structures(

@@ -5,7 +5,7 @@ pyMDMix generates queue submission scripts for HPC clusters. Customize these for
 ## Supported Queue Systems
 
 - **SLURM** - Most common modern scheduler
-- **PBS/Torque** - Traditional HPC scheduler  
+- **PBS/Torque** - Traditional HPC scheduler
 - **SGE** - Sun Grid Engine
 - **LSF** - IBM Spectrum LSF
 

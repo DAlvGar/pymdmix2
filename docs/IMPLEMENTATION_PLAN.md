@@ -1,7 +1,7 @@
 # pyMDMix Implementation Plan
 
-**Project:** Complete rewrite of pyMDMix for Python 3.10+  
-**Start Date:** 2026-03-20  
+**Project:** Complete rewrite of pyMDMix for Python 3.10+
+**Start Date:** 2026-03-20
 **Target:** Production-ready v0.3.0
 
 ---
@@ -24,7 +24,7 @@
 
 ## Phase 1: Core Infrastructure ✅ COMPLETE
 
-**Status:** Done  
+**Status:** Done
 **Completed:** 2026-03-20
 
 ### Deliverables
@@ -52,7 +52,7 @@ pymdmix/
 
 ## Phase 2: Analysis Actions 🔲 IN PROGRESS
 
-**Status:** Not started  
+**Status:** Not started
 **Estimated:** 1-2 days
 
 ### 2.1 Base Action Framework
@@ -126,7 +126,7 @@ Port from: `pyMDMix/HotSpotsManager.py` (1050 lines)
 
 ## Phase 3: Project & Replica Management 🔲 NOT STARTED
 
-**Status:** Not started  
+**Status:** Not started
 **Estimated:** 1 day
 
 ### 3.1 Configuration
@@ -173,7 +173,7 @@ Port from: `pyMDMix/Projects.py` (569 lines)
 
 ## Phase 4: Structure Preparation 🔲 NOT STARTED
 
-**Status:** Not started  
+**Status:** Not started
 **Estimated:** 1-2 days
 
 ### 4.1 PDB Preparation
@@ -225,7 +225,7 @@ Port from: `pyMDMix/Amber.py` (1239 lines - partial), `pyMDMix/OFFManager.py` (3
 
 ## Phase 5: MD Engine Interfaces 🔲 NOT STARTED
 
-**Status:** Not started  
+**Status:** Not started
 **Estimated:** 1 day
 
 ### 5.1 Base Engine
@@ -276,7 +276,7 @@ Port from: `pyMDMix/QueueWriting.py` (178 lines)
 
 ## Phase 6: CLI & I/O 🔲 NOT STARTED
 
-**Status:** Not started  
+**Status:** Not started
 **Estimated:** 0.5 days
 
 ### 6.1 CLI
@@ -309,7 +309,7 @@ Port from: `pyMDMix/Plotter.py` (345 lines)
 
 ## Phase 7: Data Migration & Testing 🔲 NOT STARTED
 
-**Status:** Not started  
+**Status:** Not started
 **Estimated:** 0.5 days
 
 ### 7.1 Solvent Library Migration
@@ -338,7 +338,7 @@ Port from: `pyMDMix/Plotter.py` (345 lines)
 
 ## Phase 8: Polish & Release 🔲 NOT STARTED
 
-**Status:** Not started  
+**Status:** Not started
 **Estimated:** 0.5 days
 
 ### 8.1 Code Quality

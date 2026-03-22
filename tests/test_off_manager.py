@@ -2,23 +2,19 @@
 Tests for pymdmix.io.off_manager module.
 """
 
-import pytest
 import numpy as np
-import tempfile
-from pathlib import Path
+import pytest
 
 from pymdmix.io.off_manager import (
+    Atom,
     OFFManager,
     OFFManagerError,
     OFFSectionError,
-    OFFUnitNotFoundError,
-    Atom,
     Residue,
 )
 
-
 # Sample OFF file content for testing
-SAMPLE_OFF_CONTENT = '''!!index array str
+SAMPLE_OFF_CONTENT = """!!index array str
  "ETA"
  "WAT"
 !entry.ETA.unit.atoms table  str name  str type  int typex  int reession  int residuePdbSequenceNumber  int flags  int sequence  int elmnt  dbl charge
@@ -133,10 +129,10 @@ SAMPLE_OFF_CONTENT = '''!!index array str
  0.0 0.0 0.0
  0.0 0.0 0.0
  0.0 0.0 0.0
-'''
+"""
 
 # OFF with box dimensions for volume testing
-OFF_WITH_BOX = '''!!index array str
+OFF_WITH_BOX = """!!index array str
  "SOLV"
 !entry.SOLV.unit.atoms table  str name  str type  int typex  int reession  int residuePdbSequenceNumber  int flags  int sequence  int elmnt  dbl charge
  "O" "OW" 0 1 1 131072 1 8 -0.8340
@@ -167,7 +163,7 @@ OFF_WITH_BOX = '''!!index array str
  0.0
 !entry.SOLV.unit.velocities table  dbl x  dbl y  dbl z
  0.0 0.0 0.0
-'''
+"""
 
 
 class TestAtom:
@@ -247,15 +243,18 @@ class TestResidue:
 
     def test_residue_center(self):
         """Test center of mass calculation."""
-        xyz = np.array([
-            [0.0, 0.0, 0.0],
-            [2.0, 0.0, 0.0],
-            [1.0, 2.0, 0.0],
-        ], dtype=np.float32)
+        xyz = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [1.0, 2.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
         residue = Residue(name="TST", xyz=xyz)
 
         center = residue.center()
-        np.testing.assert_array_almost_equal(center, [1.0, 2/3, 0.0])
+        np.testing.assert_array_almost_equal(center, [1.0, 2 / 3, 0.0])
 
     def test_residue_atom_lookup(self):
         """Test atom lookup by id and name."""

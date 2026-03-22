@@ -7,7 +7,7 @@ Multiple replicas with different random seeds improve sampling.
 
 Replicas track:
 - Setup state (topology, coordinates)
-- Simulation progress  
+- Simulation progress
 - Analysis status
 
 Examples
@@ -27,10 +27,9 @@ Examples
 
 from __future__ import annotations
 
-import os
+import logging
 import re
 import shutil
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -39,8 +38,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pymdmix.core.grid import Grid
-    from pymdmix.core.trajectory import Trajectory
     from pymdmix.core.structure import Structure
+    from pymdmix.core.trajectory import Trajectory
 
 log = logging.getLogger(__name__)
 
@@ -51,30 +50,33 @@ class ReplicaState(Enum):
 
     States progress: CREATED → SETUP → READY → RUNNING → COMPLETE → ANALYZED
     """
-    CREATED = auto()    # Just created, no files
-    SETUP = auto()      # Topology/coordinates generated
-    READY = auto()      # Ready to submit
-    RUNNING = auto()    # Simulation in progress
-    COMPLETE = auto()   # Simulation finished
-    ALIGNED = auto()    # Trajectory aligned
-    ANALYZED = auto()   # Analysis complete
-    ERROR = auto()      # Error state
+
+    CREATED = auto()  # Just created, no files
+    SETUP = auto()  # Topology/coordinates generated
+    READY = auto()  # Ready to submit
+    RUNNING = auto()  # Simulation in progress
+    COMPLETE = auto()  # Simulation finished
+    ALIGNED = auto()  # Trajectory aligned
+    ANALYZED = auto()  # Analysis complete
+    ERROR = auto()  # Error state
 
 
 class ReplicaError(Exception):
     """Base exception for replica operations."""
+
     pass
 
 
 class BadFileError(ReplicaError):
     """Invalid or missing file."""
+
     pass
 
 
 # Default folder names
 DEFAULT_FOLDERS = {
     "min": "min",
-    "eq": "eq", 
+    "eq": "eq",
     "md": "md",
     "align": "align",
     "density": "density",
@@ -89,7 +91,7 @@ TRAJECTORY_EXTENSIONS = ("nc", "netcdf", "dcd", "mdcrd", "crd", "xtc", "trr")
 class MDSettings:
     """
     MD simulation settings for a replica.
-    
+
     Attributes
     ----------
     nanos : int
@@ -111,6 +113,7 @@ class MDSettings:
     align_mask : str
         Amber mask for trajectory alignment
     """
+
     nanos: int = 20
     temperature: float = 300.0
     timestep: float = 2.0
@@ -121,19 +124,19 @@ class MDSettings:
     restraint_mask: str = ""
     align_mask: str = ""
     md_program: str = "AMBER"
-    
+
     @property
     def has_restraints(self) -> bool:
         """Check if restraints are enabled."""
         return self.restraint_mode != "FREE" and self.restraint_force > 0
-    
+
     @property
     def n_traj_files(self) -> int:
         """Expected number of trajectory files."""
         # nanos * 1e6 fs / timestep / prod_steps
         return int((self.nanos * 1e6 / self.timestep) / self.prod_steps)
-    
-    @property  
+
+    @property
     def n_snapshots(self) -> int:
         """Total expected snapshots."""
         return self.n_traj_files * (self.prod_steps // self.traj_frequency)
@@ -167,6 +170,7 @@ class Replica:
     settings : MDSettings | None
         MD simulation settings
     """
+
     name: str
     solvent: str
     path: Path | None = None
@@ -182,7 +186,7 @@ class Replica:
     # Simulation info
     seed: int = 0
     n_steps: int = 0
-    
+
     # MD Settings
     settings: MDSettings | None = field(default_factory=MDSettings)
 
@@ -193,7 +197,7 @@ class Replica:
     align_folder: str = "align"
     density_folder: str = "density"
     energy_folder: str = "energy"
-    
+
     # Output templates
     md_output_template: str = "md_{step:03d}.{extension}"
     eq_output_template: str = "eq_{step:02d}.{extension}"
@@ -204,7 +208,7 @@ class Replica:
 
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
-    
+
     # Internal state
     _folders_created: bool = field(default=False, repr=False)
     _md_input_written: bool = field(default=False, repr=False)
@@ -217,7 +221,7 @@ class Replica:
 
         if isinstance(self.state, str):
             self.state = ReplicaState[self.state]
-            
+
         if self.settings is None:
             self.settings = MDSettings()
         elif isinstance(self.settings, dict):
@@ -226,7 +230,7 @@ class Replica:
     # =========================================================================
     # Path Properties
     # =========================================================================
-    
+
     @property
     def topology_path(self) -> Path | None:
         """Full path to topology file."""
@@ -254,49 +258,49 @@ class Replica:
         if self.path and self.reference:
             return self.path / self.reference
         return None
-    
+
     @property
     def pdb_path(self) -> Path | None:
         """Full path to PDB file."""
         if self.path and self.pdb:
             return self.path / self.pdb
         return None
-    
+
     @property
     def min_path(self) -> Path | None:
         """Full path to minimization folder."""
         if self.path:
             return self.path / self.min_folder
         return None
-    
+
     @property
     def eq_path(self) -> Path | None:
         """Full path to equilibration folder."""
         if self.path:
             return self.path / self.eq_folder
         return None
-    
+
     @property
     def md_path(self) -> Path | None:
         """Full path to production MD folder."""
         if self.path:
             return self.path / self.md_folder
         return None
-    
+
     @property
     def align_path(self) -> Path | None:
         """Full path to aligned trajectory folder."""
         if self.path:
             return self.path / self.align_folder
         return None
-    
+
     @property
     def density_path(self) -> Path | None:
         """Full path to density grids folder."""
         if self.path:
             return self.path / self.density_folder
         return None
-    
+
     @property
     def energy_path(self) -> Path | None:
         """Full path to energy grids folder."""
@@ -307,7 +311,7 @@ class Replica:
     # =========================================================================
     # Status Checks
     # =========================================================================
-    
+
     def exists(self) -> bool:
         """Check if replica directory exists."""
         return self.path is not None and self.path.exists()
@@ -319,15 +323,15 @@ class Replica:
     def has_trajectory(self) -> bool:
         """Check if trajectory file exists."""
         return self.trajectory_path is not None and self.trajectory_path.exists()
-    
+
     def folders_created(self) -> bool:
         """Return True if replica directory structure is created."""
         return self._folders_created or (self.path is not None and self.path.exists())
-    
+
     def md_input_written(self) -> bool:
         """Return True if MD input files have been written."""
         return self._md_input_written
-    
+
     def is_created(self) -> bool:
         """Return True if replica folder and MD inputs are ready."""
         return self.folders_created() and self.md_input_written()
@@ -342,7 +346,7 @@ class Replica:
             out_files = list(self.min_path.glob("*.out")) + list(self.min_path.glob("*.rst7"))
             return len(out_files) > 0
         return False
-    
+
     def is_equilibration_finished(self) -> bool:
         """Check if equilibration stage is complete."""
         checker = self.get_checker(warn=False)
@@ -353,16 +357,16 @@ class Replica:
             out_files = list(self.eq_path.glob("*.out")) + list(self.eq_path.glob("*.rst7"))
             return len(out_files) >= 2  # Typically eq1, eq2
         return False
-    
+
     def is_production_finished(self, step_selection: list[int] | None = None) -> bool:
         """
         Check if MD production stage is complete.
-        
+
         Parameters
         ----------
         step_selection : list[int] | None
             Specific steps to check. None checks all expected steps.
-            
+
         Returns
         -------
         bool
@@ -370,27 +374,27 @@ class Replica:
         """
         if not self.settings:
             return False
-            
+
         if step_selection is None:
             step_selection = list(range(1, self.settings.n_traj_files + 1))
-            
+
         checker = self.get_checker(warn=False)
         if checker:
             return checker.check_production(step_selection=step_selection)
-            
+
         # Fallback: check trajectory files exist
         extensions = self.check_production_extension(step_selection)
         return all(ext is not None for ext in extensions.values())
-    
+
     def is_aligned(self, step_selection: list[int] | None = None) -> bool:
         """
         Check if trajectory has been aligned.
-        
+
         Parameters
         ----------
         step_selection : list[int] | None
             Specific steps to check.
-            
+
         Returns
         -------
         bool
@@ -398,24 +402,24 @@ class Replica:
         """
         if not self.settings:
             return False
-            
+
         if step_selection is None:
             step_selection = list(range(1, self.settings.n_traj_files + 1))
-            
+
         extensions = self.check_align_extension(step_selection)
         return all(ext is not None for ext in extensions.values())
-    
+
     def last_completed_production_step(self, start_step: int = 1) -> int:
         """
         Find the last completed production step.
-        
+
         Useful for tracking progress or handling incomplete runs.
-        
+
         Parameters
         ----------
         start_step : int
             Start checking from this step number.
-            
+
         Returns
         -------
         int
@@ -423,7 +427,7 @@ class Replica:
         """
         if not self.settings:
             return 0
-            
+
         last = 0
         for step in range(start_step, self.settings.n_traj_files + 1):
             if self.is_production_finished([step]):
@@ -435,12 +439,12 @@ class Replica:
     def check_production_extension(self, steps: list[int] | None = None) -> dict[int, str | None]:
         """
         Check file extensions for production trajectories.
-        
+
         Parameters
         ----------
         steps : list[int] | None
             Steps to check. None checks all.
-            
+
         Returns
         -------
         dict[int, str | None]
@@ -448,20 +452,20 @@ class Replica:
         """
         if not self.md_path or not self.md_path.exists():
             return {}
-            
+
         if steps is None and self.settings:
             steps = list(range(1, self.settings.n_traj_files + 1))
         elif steps is None:
             steps = []
-            
+
         result = {}
         files = list(self.md_path.iterdir())
-        
+
         for step in steps:
             # Build pattern from template
             base = self.md_output_template.format(step=step, extension="")
             pattern = re.compile(re.escape(base) + r"(\w+)")
-            
+
             matches = []
             for f in files:
                 m = pattern.match(f.name)
@@ -469,20 +473,20 @@ class Replica:
                     ext = m.group(1)
                     if ext in TRAJECTORY_EXTENSIONS:
                         matches.append(ext)
-                        
+
             result[step] = matches[0] if matches else None
-            
+
         return result
-    
+
     def check_align_extension(self, steps: list[int] | None = None) -> dict[int, str | None]:
         """
         Check file extensions for aligned trajectories.
-        
+
         Parameters
         ----------
         steps : list[int] | None
             Steps to check.
-            
+
         Returns
         -------
         dict[int, str | None]
@@ -492,19 +496,19 @@ class Replica:
             if steps:
                 return {s: None for s in steps}
             return {}
-            
+
         if steps is None and self.settings:
             steps = list(range(1, self.settings.n_traj_files + 1))
         elif steps is None:
             steps = []
-            
+
         result = {}
         files = list(self.align_path.iterdir())
-        
+
         for step in steps:
             base = self.md_output_template.format(step=step, extension="")
             pattern = re.compile(re.escape(base) + r"(\w+)")
-            
+
             matches = []
             for f in files:
                 m = pattern.match(f.name)
@@ -512,15 +516,15 @@ class Replica:
                     ext = m.group(1)
                     if ext in TRAJECTORY_EXTENSIONS:
                         matches.append(ext)
-                        
+
             result[step] = matches[0] if matches else None
-            
+
         return result
 
     # =========================================================================
     # Folder Creation
     # =========================================================================
-    
+
     def create_directory(self) -> None:
         """Create replica directory structure."""
         if self.path is None:
@@ -536,7 +540,7 @@ class Replica:
         self._folders_created = True
         self._update_modified()
         log.info(f"Created replica directory: {self.path}")
-    
+
     def create_folder(
         self,
         where: Path | str | None = None,
@@ -545,7 +549,7 @@ class Replica:
     ) -> None:
         """
         Create directory tree and copy/generate system files.
-        
+
         Parameters
         ----------
         where : Path | str | None
@@ -557,69 +561,69 @@ class Replica:
         """
         if not self.name:
             raise ReplicaError("Unnamed replica - cannot create folder")
-            
+
         # Determine base path
         if where:
             where = Path(where).resolve()
         else:
             where = Path.cwd()
-            
+
         self.path = where / self.name
-        
+
         # Create directory structure
         self.create_directory()
-        
+
         # Copy system files if provided
         if system is not None:
             self._setup_system_files(system, fix_topology)
-        
+
         # Save replica state
         self.save()
         log.info(f"Created folder structure for replica {self.name}")
-    
+
     def _setup_system_files(self, system: Any, fix_topology: bool = True) -> None:
         """Copy system files to replica directory."""
         if self.path is None:
             raise ReplicaError("Replica path not set")
-            
+
         basename = f"{system.name}_{self.name}"
-        
+
         # Save topology and coordinates
         if hasattr(system, "save_top_crd"):
             system.save_top_crd(self.path / basename)
             self.topology = f"{basename}.prmtop"
             self.coordinates = f"{basename}.prmcrd"
-        
+
         # Save PDB
         if hasattr(system, "save_pdb"):
             pdb_path = self.path / f"{basename}.pdb"
             system.save_pdb(pdb_path)
             self.pdb = f"{basename}.pdb"
-            
+
         # Save reference
         if hasattr(system, "ref") and system.ref:
             ref_path = self.path / f"{basename}_ref.pdb"
             if hasattr(system.ref, "write_pdb"):
                 system.ref.write_pdb(ref_path)
             self.reference = f"{basename}_ref.pdb"
-            
+
         # Fix topology if requested
         if fix_topology and self.topology_path and self.topology_path.exists():
             self._fix_topology(self.topology_path)
-    
+
     def _fix_topology(self, prmtop: Path) -> None:
         """
         Remove SCEE and SCNB sections from Amber topology.
-        
+
         Needed for some solvent boxes that crash newer Amber versions.
         """
         backup = prmtop.with_suffix(".prmtop_back")
         shutil.copy(prmtop, backup)
-        
+
         with open(backup) as f:
             lines = f.readlines()
-            
-        with open(prmtop, 'w') as out:
+
+        with open(prmtop, "w") as out:
             skip = False
             for line in lines:
                 if "%FLAG SCEE_SCALE_FACTOR" in line:
@@ -629,15 +633,15 @@ class Replica:
                     out.write(line)
                 elif not skip:
                     out.write(line)
-                    
-        log.debug(f"Fixed topology: removed SCEE/SCNB sections")
+
+        log.debug("Fixed topology: removed SCEE/SCNB sections")
 
     def create_md_input(self, **kwargs) -> bool:
         """
         Create MD input configuration files.
-        
+
         Generates input files for the selected MD program (AMBER, NAMD, OpenMM).
-        
+
         Returns
         -------
         bool
@@ -645,45 +649,48 @@ class Replica:
         """
         if not self.folders_created():
             self.create_folder()
-            
+
         if not self.settings:
             raise ReplicaError("MD settings not configured")
-            
+
         program = self.settings.md_program.upper()
-        
+
         if program == "AMBER":
             from pymdmix.engines.amber import AmberWriter
+
             writer = AmberWriter(self)
         elif program == "NAMD":
             from pymdmix.engines.namd import NAMDWriter
+
             writer = NAMDWriter(self)
         elif program == "OPENMM":
             from pymdmix.engines.openmm import OpenMMWriter
+
             writer = OpenMMWriter(self)
         else:
             raise ReplicaError(f"Unknown MD program: {program}")
-            
+
         writer.write_commands()
         writer.write_replica_input()
-        
+
         # Apply H-mass repartitioning for 4fs timestep
         if self.settings.timestep == 4:
             log.info(f"4fs timestep: Applying H-mass repartitioning to {self.name}")
             self.apply_hmass_repartitioning()
-            
+
         self._md_input_written = True
         self.save()
         return True
-    
+
     def create_queue_input(self, queue_system: str, **kwargs) -> bool:
         """
         Create queue submission scripts.
-        
+
         Parameters
         ----------
         queue_system : str
             Queue system name (slurm, pbs, sge, lsf).
-            
+
         Returns
         -------
         bool
@@ -691,23 +698,23 @@ class Replica:
         """
         if not self.folders_created():
             return False
-            
+
         from pymdmix.engines.queue import QueueConfig, generate_queue_script
-        
+
         log.info(f"Writing {queue_system} scripts for replica {self.name}")
-        
+
         config = QueueConfig(system=queue_system, **kwargs)
         script = generate_queue_script(self, config)
-        
+
         script_path = self.path / f"submit_{queue_system}.sh"
         script_path.write_text(script)
-        
+
         return True
-    
+
     def create_all(self, queue: str | None = None, **kwargs) -> None:
         """
         Create folders, MD input, and optionally queue scripts.
-        
+
         Parameters
         ----------
         queue : str | None
@@ -717,37 +724,37 @@ class Replica:
         self.create_md_input(**kwargs)
         if queue:
             self.create_queue_input(queue, **kwargs)
-    
+
     def apply_hmass_repartitioning(self) -> None:
         """Apply hydrogen mass repartitioning to topology."""
         if not self.topology_path or not self.topology_path.exists():
             raise ReplicaError("Topology file not found")
-            
+
         try:
             import parmed as pmd
-            
+
             parm = pmd.load_file(str(self.topology_path))
             action = pmd.tools.actions.HMassRepartition(parm)
             action.execute()
-            
+
             # Backup and save
             backup = self.topology_path.with_suffix(".prmtop_back")
             shutil.move(self.topology_path, backup)
             parm.save(str(self.topology_path))
-            
+
             log.info(f"Applied H-mass repartitioning to {self.topology}")
-            
+
         except ImportError:
             log.warning("parmed not available - cannot apply H-mass repartitioning")
 
     # =========================================================================
     # Data Access
     # =========================================================================
-    
+
     def get_checker(self, warn: bool = True) -> Any:
         """
         Get MD checker for the simulation program.
-        
+
         Returns
         -------
         AmberChecker | NAMDChecker | OpenMMChecker | None
@@ -755,30 +762,34 @@ class Replica:
         """
         if not self.settings:
             return None
-            
+
         program = self.settings.md_program.upper()
-        
+
         try:
             if program == "AMBER":
                 from pymdmix.engines.amber import AmberChecker
+
                 return AmberChecker(self, warn=warn)
             elif program == "NAMD":
                 from pymdmix.engines.namd import NAMDChecker
+
                 return NAMDChecker(self, warn=warn)
             elif program == "OPENMM":
                 from pymdmix.engines.openmm import OpenMMChecker
+
                 return OpenMMChecker(self, warn=warn)
         except ImportError:
             pass
-            
+
         return None
-    
+
     def get_solvent(self) -> Any:
         """Get solvent instance for this replica."""
         from pymdmix.core.solvent import SolventLibrary
+
         library = SolventLibrary()
         return library.get(self.solvent)
-    
+
     def get_probes(self) -> list[str]:
         """Get list of probe names from solvent."""
         solvent = self.get_solvent()
@@ -787,7 +798,7 @@ class Replica:
         if hasattr(solvent, "com_probes"):
             probes.extend(solvent.com_probes.keys())
         return probes
-    
+
     def get_trajectory(
         self,
         step_selection: list[int] | None = None,
@@ -796,7 +807,7 @@ class Replica:
     ) -> Trajectory:
         """
         Get trajectory for this replica.
-        
+
         Parameters
         ----------
         step_selection : list[int] | None
@@ -805,20 +816,20 @@ class Replica:
             Use aligned trajectory if available.
         frame_step : int
             Take every Nth frame.
-            
+
         Returns
         -------
         Trajectory
             Trajectory object for analysis.
         """
         from pymdmix.core.trajectory import Trajectory
-        
+
         if not self.settings:
             raise ReplicaError("MD settings not configured")
-            
+
         if step_selection is None:
             step_selection = list(range(1, self.settings.n_traj_files + 1))
-            
+
         # Decide which trajectory to use
         if use_aligned and self.is_aligned(step_selection):
             path = self.align_path
@@ -830,7 +841,7 @@ class Replica:
             path = self.md_path
             extensions = self.check_production_extension(step_selection)
             log.debug("Using production trajectory")
-            
+
         # Build file list
         files = []
         for step in sorted(step_selection):
@@ -840,33 +851,33 @@ class Replica:
                 continue
             fname = self.md_output_template.format(step=step, extension=ext)
             files.append(path / fname)
-            
+
         # Get topology
         topology = self.topology_path or self.pdb_path
-        
+
         return Trajectory(files, topology, step=frame_step)
-    
+
     def get_pdb(self) -> Structure:
         """
         Get PDB structure for this replica.
-        
+
         Returns
         -------
         Structure
             PDB structure with solvent information.
         """
         from pymdmix.core.structure import load_structure
-        
+
         if not self.pdb_path or not self.pdb_path.exists():
             raise BadFileError(f"PDB file not found: {self.pdb_path}")
-            
+
         structure = load_structure(self.pdb_path)
         return structure
-    
+
     # =========================================================================
     # Grid Management
     # =========================================================================
-    
+
     def fetch_grids(
         self,
         prefix: str | None = None,
@@ -875,7 +886,7 @@ class Replica:
     ) -> list[Grid]:
         """
         Find and load grids from replica folders.
-        
+
         Parameters
         ----------
         prefix : str | None
@@ -884,32 +895,32 @@ class Replica:
             Filter by filename suffix (before extension).
         grid_type : str | None
             Filter by grid type (density, energy, etc.).
-            
+
         Returns
         -------
         list[Grid]
             List of Grid objects found.
         """
         from pymdmix.core.grid import Grid
-        
+
         if not self.path or not self.path.exists():
             return []
-            
+
         prefix = prefix or ""
         suffix = suffix or ""
-        
+
         grids = []
-        
+
         # Search in replica folder and subfolders
         for dx_file in self.path.rglob("*.dx"):
             fname = dx_file.stem
-            
+
             # Apply filters
             if prefix and not fname.startswith(prefix):
                 continue
             if suffix and not fname.endswith(suffix):
                 continue
-                
+
             try:
                 grid = Grid.read_dx(dx_file)
                 # Try to parse probe/type from filename
@@ -917,10 +928,10 @@ class Replica:
                 grids.append(grid)
             except Exception as e:
                 log.warning(f"Failed to load grid {dx_file}: {e}")
-                
+
         self._grids = grids
         return grids
-    
+
     def get_grids_by_type(
         self,
         grid_type: str | None = None,
@@ -928,12 +939,12 @@ class Replica:
     ) -> dict[str, dict[str, Grid]]:
         """
         Get grids organized by type and probe.
-        
+
         Parameters
         ----------
         grid_type : str | None
             Filter by type (density, energy). None returns all.
-            
+
         Returns
         -------
         dict[str, dict[str, Grid]]
@@ -941,30 +952,30 @@ class Replica:
         """
         if not self._grids:
             self.fetch_grids(**kwargs)
-            
+
         result: dict[str, dict[str, Grid]] = {}
-        
-        for grid in (self._grids or []):
+
+        for grid in self._grids or []:
             # Parse type from path or filename
             gtype = "unknown"
             if "density" in str(grid.metadata.get("path", "")):
                 gtype = "density"
             elif "energy" in str(grid.metadata.get("path", "")):
                 gtype = "energy"
-                
+
             if grid_type and gtype != grid_type:
                 continue
-                
+
             if gtype not in result:
                 result[gtype] = {}
-                
+
             # Try to get probe from filename
             name = grid.metadata.get("name", "")
             probe = name.split("_")[0] if "_" in name else name
             result[gtype][probe] = grid
-            
+
         return result
-    
+
     def get_grids_by_probe(
         self,
         probe_list: list[str] | str,
@@ -972,12 +983,12 @@ class Replica:
     ) -> dict[str, list[Grid]]:
         """
         Get grids for specific probes.
-        
+
         Parameters
         ----------
         probe_list : list[str] | str
             Probe name(s) to find.
-            
+
         Returns
         -------
         dict[str, list[Grid]]
@@ -985,27 +996,27 @@ class Replica:
         """
         if isinstance(probe_list, str):
             probe_list = [probe_list]
-            
+
         if not self._grids:
             self.fetch_grids(**kwargs)
-            
+
         result: dict[str, list[Grid]] = {}
-        
-        for grid in (self._grids or []):
+
+        for grid in self._grids or []:
             name = grid.metadata.get("name", "")
-            
+
             for probe in probe_list:
                 if probe in name:
                     if probe not in result:
                         result[probe] = []
                     result[probe].append(grid)
-                    
+
         return result
 
     # =========================================================================
     # State Management
     # =========================================================================
-    
+
     def set_state(self, state: ReplicaState) -> None:
         """Update replica state."""
         old_state = self.state
@@ -1042,7 +1053,9 @@ class Replica:
                 "restraint_mask": self.settings.restraint_mask,
                 "align_mask": self.settings.align_mask,
                 "md_program": self.settings.md_program,
-            } if self.settings else None,
+            }
+            if self.settings
+            else None,
             "min_folder": self.min_folder,
             "eq_folder": self.eq_folder,
             "md_folder": self.md_folder,
@@ -1067,7 +1080,7 @@ class Replica:
         # Handle path
         if "path" in data and data["path"]:
             data["path"] = Path(data["path"])
-            
+
         # Handle settings
         if "settings" in data and isinstance(data["settings"], dict):
             data["settings"] = MDSettings(**data["settings"])
@@ -1084,13 +1097,13 @@ class Replica:
             Output path. Defaults to {self.path}/replica.json
         """
         import json
-        
+
         if path is None:
             if self.path is None:
                 raise ValueError("No path specified and replica path not set")
             path = self.path / "replica.json"
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
         log.debug(f"Saved replica to {path}")
@@ -1111,7 +1124,7 @@ class Replica:
             Loaded replica
         """
         import json
-        
+
         with open(path) as f:
             data = json.load(f)
 
@@ -1120,43 +1133,45 @@ class Replica:
             data["path"] = path.parent
 
         return cls.from_dict(data)
-    
+
     def desc(self) -> str:
         """Return a summary description string."""
         parts = [
             f"REPLICA:{self.name}",
             f"solvent:{self.solvent}",
         ]
-        
+
         if self.settings:
             parts.append(f"nanos:{self.settings.nanos}")
             if self.settings.has_restraints:
-                parts.extend([
-                    f"restrMode:{self.settings.restraint_mode}",
-                    f"restrForce:{self.settings.restraint_force:.3f}",
-                ])
+                parts.extend(
+                    [
+                        f"restrMode:{self.settings.restraint_mode}",
+                        f"restrForce:{self.settings.restraint_force:.3f}",
+                    ]
+                )
             else:
                 parts.append("restrMode:FREE")
-                
-        parts.extend([
-            f"Min:{self.is_minimization_finished()}",
-            f"Eq:{self.is_equilibration_finished()}",
-            f"Prod:{self.is_production_finished()}",
-            f"Align:{self.is_aligned()}",
-        ])
-        
+
+        parts.extend(
+            [
+                f"Min:{self.is_minimization_finished()}",
+                f"Eq:{self.is_equilibration_finished()}",
+                f"Prod:{self.is_production_finished()}",
+                f"Align:{self.is_aligned()}",
+            ]
+        )
+
         return "\t".join(parts)
 
     def __repr__(self) -> str:
-        return (
-            f"Replica(name={self.name!r}, solvent={self.solvent!r}, "
-            f"state={self.state.name})"
-        )
+        return f"Replica(name={self.name!r}, solvent={self.solvent!r}, state={self.state.name})"
 
 
 # =========================================================================
 # Helper Functions
 # =========================================================================
+
 
 def create_replica(
     name: str,
@@ -1208,18 +1223,18 @@ def create_replica(
 def rename_replica_list(replicas: list[Replica]) -> None:
     """
     Set names according to solvent and count.
-    
+
     E.g., 3 ETA replicas + 2 WAT → ['ETA_1', 'ETA_2', 'ETA_3', 'WAT_1', 'WAT_2']
-    
+
     Parameters
     ----------
     replicas : list[Replica]
         List of replicas to rename (modified in place).
     """
     from collections import Counter
-    
+
     counts: Counter[str] = Counter()
-    
+
     for replica in replicas:
         counts[replica.solvent] += 1
         replica.name = f"{replica.solvent}_{counts[replica.solvent]}"
@@ -1228,12 +1243,12 @@ def rename_replica_list(replicas: list[Replica]) -> None:
 def load_replica(replica_file: Path | str | None = None) -> Replica:
     """
     Load existing replica from file.
-    
+
     Parameters
     ----------
     replica_file : Path | str | None
         Path to replica.json. If None, searches current directory.
-        
+
     Returns
     -------
     Replica
@@ -1243,12 +1258,12 @@ def load_replica(replica_file: Path | str | None = None) -> Replica:
         # Search for replica files
         files = list(Path.cwd().glob("*.json")) + list(Path.cwd().glob("*.mrepl"))
         replica_files = [f for f in files if "replica" in f.name.lower()]
-        
+
         if len(replica_files) > 1:
             raise ReplicaError("Multiple replica files found - specify which one")
         elif not replica_files:
             raise ReplicaError("No replica file found in current directory")
-            
+
         replica_file = replica_files[0]
-        
+
     return Replica.load(Path(replica_file))

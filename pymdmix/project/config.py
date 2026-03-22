@@ -21,18 +21,19 @@ Examples
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from typing import Any
-import os
 import json
 import logging
+import os
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
 
 log = logging.getLogger(__name__)
 
 # Try to import YAML support
 try:
     import yaml
+
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
@@ -67,6 +68,7 @@ class MDSettings:
     restraint_mask : str
         Amber mask for restrained atoms
     """
+
     # Production settings
     nsteps: int = 500000
     timestep: float = 2.0
@@ -113,7 +115,7 @@ class MDSettings:
         return f"""Production MD
 &cntrl
   imin=0, irest=1, ntx=5,
-  nstlim={self.nsteps}, dt={self.timestep/1000:.4f},
+  nstlim={self.nsteps}, dt={self.timestep / 1000:.4f},
   temp0={self.temperature}, tempi={self.temperature},
   ntt={self.ntt}, gamma_ln={self.gamma_ln},
   ntp={self.ntp}, barostat={self.barostat}, pres0={self.pressure},
@@ -147,6 +149,7 @@ class Config:
     queue_system : str
         Default queue system (slurm, sge, pbs, local)
     """
+
     amber_home: Path | None = None
     work_dir: Path = field(default_factory=Path.cwd)
     md_settings: MDSettings = field(default_factory=MDSettings)
@@ -259,7 +262,7 @@ class Config:
 
     def to_json(self, path: str | Path) -> None:
         """Save configuration to JSON file."""
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
         log.info(f"Saved config to {path}")
 
@@ -275,7 +278,7 @@ class Config:
         if not HAS_YAML:
             raise ImportError("PyYAML required for YAML support")
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False)
         log.info(f"Saved config to {path}")
 
@@ -294,9 +297,9 @@ class Config:
         """Load configuration from file (auto-detect format)."""
         path = Path(path)
 
-        if path.suffix in ('.yaml', '.yml'):
+        if path.suffix in (".yaml", ".yml"):
             return cls.from_yaml(path)
-        elif path.suffix == '.json':
+        elif path.suffix == ".json":
             return cls.from_json(path)
         else:
             raise ValueError(f"Unknown config format: {path.suffix}")
@@ -305,7 +308,7 @@ class Config:
         """Save configuration to file (auto-detect format)."""
         path = Path(path)
 
-        if path.suffix in ('.yaml', '.yml'):
+        if path.suffix in (".yaml", ".yml"):
             self.to_yaml(path)
         else:
             self.to_json(path)
