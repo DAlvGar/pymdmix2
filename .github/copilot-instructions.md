@@ -78,7 +78,7 @@ from pymdmix.engines.queue import QueueConfig, generate_queue_script
 config = QueueConfig(system="slurm", partition="gpu", n_gpus=1, time_hours=24)
 script = generate_queue_script(config=config, job_name="md_production", commands=[...])
 ```
-Queue templates live in `pymdmix/data/templates/`. When adding a new queue system, add both the `QueueConfig` logic in `engines/queue.py` **and** a Jinja2/string template in `data/templates/`.
+Queue templates are currently defined inline in `pymdmix/engines/queue.py` (`SLURM_TEMPLATE`, `SGE_TEMPLATE`, `PBS_TEMPLATE`, `LOCAL_TEMPLATE`). When adding a new queue system, update both the `QueueConfig` logic **and** the template mapping in `engines/queue.py`.
 
 ## Developer Workflows
 
