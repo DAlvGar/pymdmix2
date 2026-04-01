@@ -37,6 +37,9 @@ from pymdmix.utils import (
     valid_path,
 )
 
+# Prevent pytest from collecting the imported utility function as a test
+test_root.__test__ = False  # type: ignore[attr-defined]
+
 
 class TestPathUtilities:
     """Tests for path utility functions."""

@@ -11,13 +11,21 @@ Available actions:
 - align: Trajectory alignment
 - energy: Free energy conversion and Boltzmann averaging
 
+Manager:
+- ActionsManager: Parallel execution of actions across replicas
+
 Examples
 --------
 >>> from pymdmix.analysis import DensityAction, run_action
 >>> action = DensityAction()
 >>> result = action.run(replica, trajectory, probes=["OH", "CT"])
 
->>> from pymdmix.analysis import boltzmann_average
+>>> from pymdmix.analysis import ActionsManager, boltzmann_average
+>>> manager = ActionsManager(ncpus=4)
+>>> manager.add_replicas([replica1, replica2])
+>>> manager.add_actions([DensityAction])
+>>> results = manager.run()
+
 >>> avg_grid = boltzmann_average(["rep1.dx", "rep2.dx"])
 """
 
@@ -40,7 +48,8 @@ from pymdmix.analysis.energy import (
     normalize_grid,
     replica_average,
 )
-from pymdmix.analysis.hotspots import Hotspot, HotspotAction, detect_hotspots
+from pymdmix.analysis.hotspots import Hotspot, HotSpotSet, HotspotAction, detect_hotspots
+from pymdmix.analysis.manager import ActionsManager, Job, JobResult
 from pymdmix.analysis.residence import ResidenceAction, calculate_residence
 
 __all__ = [
@@ -60,6 +69,7 @@ __all__ = [
     # Hotspots
     "HotspotAction",
     "Hotspot",
+    "HotSpotSet",
     "detect_hotspots",
     # Alignment
     "AlignAction",
@@ -74,4 +84,8 @@ __all__ = [
     "normalize_grid",
     "replica_average",
     "EnergyResult",
+    # Manager
+    "ActionsManager",
+    "Job",
+    "JobResult",
 ]
