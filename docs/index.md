@@ -3,7 +3,7 @@
 **pyMDMix** is a Python toolkit for molecular dynamics simulations with organic solvent mixtures, used in drug discovery for identifying binding hotspots on protein surfaces.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## What is MDMix?
 
@@ -26,7 +26,9 @@ The MDMix method uses molecular dynamics simulations with organic solvent/water 
 
 ```bash
 # Install
-pip install -e ".[dev]"
+git clone https://github.com/DAlvGar/pymdmix2.git
+cd pymdmix2
+uv sync --all-extras
 
 # Create a new project
 pymdmix create project myproject
@@ -120,9 +122,9 @@ If you use pyMDMix in your research, please cite:
 
 ## License
 
-pyMDMix is released under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0).
+pyMDMix is released under the [MIT License](https://opensource.org/licenses/MIT).
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/DAlvGar/pyMDmix/issues)
+- **Issues**: [GitHub Issues](https://github.com/DAlvGar/pymdmix2/issues)
 - **Author**: Daniel Alvarez-Garcia

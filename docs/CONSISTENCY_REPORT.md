@@ -94,7 +94,7 @@ Tested on 2026-03-22 with `pep.pdb` (8-residue peptide):
 
 ## Test Count
 
-- **621 tests passing**
+- **698 tests passing** (updated after PR #1 and PR #2 merges)
 - 8 skipped (optional dependencies)
 - 2 pre-existing failures (unrelated to port work)
 
@@ -103,6 +103,24 @@ Tested on 2026-03-22 with `pep.pdb` (8-residue peptide):
 |------|--------|
 | `test_gromacs.py::test_create_index_groups` | Asserts `"Non-Protein"` but GROMACS outputs `"non-Protein"` (capitalisation) |
 | `test_project.py::TestConfig::test_config_validation` | Config validation not yet implemented; returns empty error list |
+
+## Recent Changes (PR #1 and PR #2)
+
+### PR #1 — Fix Public API Inconsistencies
+
+- **`project/__init__.py`**: Fixed `MDSettings` export — now correctly re-exports `MDSettings` from `replica.py` (workflow-level: `nanos`, `temperature`, `restraint_mode`, …) instead of the Amber-specific `MDSettings` from `config.py`.
+- **`analysis/__init__.py`**: Added missing public exports: `ActionsManager`, `Job`, `JobResult`, and `HotSpotSet` are now importable directly from `pymdmix.analysis`.
+- **Deleted** stale editor artifact `pymdmix/analysis/manager.py.backup`.
+- **`tests/test_utils.py`**: Suppressed spurious pytest collection warning on `test_root` helper.
+
+### PR #2 — End-to-End and Integration Tests
+
+Added 77 new tests covering full cross-module pipelines and real bundled data:
+
+| File | Tests | Description |
+|------|-------|-------------|
+| `tests/test_e2e_workflow.py` | 40 | Synthetic-data e2e pipelines (density→hotspot, grid chain, project lifecycle, etc.) |
+| `tests/test_integration_real_data.py` | 37 | Real bundled data (`pep.pdb`, `pep.prmtop`, solvent JSONs, OFF files, legacy configs) |
 
 ## Dependencies
 

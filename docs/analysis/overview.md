@@ -188,7 +188,8 @@ mol modstyle 0 1 Isosurface -1.0 0 0 0 1 1
 ## Python API
 
 ```python
-from pymdmix.analysis import DensityAction, HotspotAction
+from pymdmix.analysis import DensityAction, HotspotAction, HotSpotSet
+from pymdmix.analysis import ActionsManager, Job, JobResult
 from pymdmix.project import Project
 
 # Load project
@@ -201,9 +202,16 @@ results = density_action.run(replica, nprocs=4)
 
 # Run hotspot detection
 hotspot_action = HotspotAction()
-hotspots = hotspot_action.run(replica)
+hotspot_result = hotspot_action.run(replica)
+hotspots: HotSpotSet = hotspot_result.hotspots
 for hs in hotspots:
     print(f"Hotspot at {hs.center}: {hs.energy:.2f} kcal/mol")
+
+# Run actions across multiple replicas in parallel
+manager = ActionsManager(ncpus=4)
+manager.add_replicas([replica1, replica2])
+manager.add_actions([DensityAction])
+results = manager.run()  # returns list of JobResult
 ```
 
 ---
