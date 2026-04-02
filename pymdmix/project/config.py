@@ -21,6 +21,7 @@ Examples
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import os
@@ -313,14 +314,81 @@ class Config:
         else:
             self.to_json(path)
 
+    @classmethod
+    def from_defaults(cls, user_cfg: str | Path | None = None) -> "Config":
+        """
+        Create a :class:`Config` by merging package defaults with user overrides.
+
+        This mirrors the behaviour of the original pyMDMix ``settings.py``
+        module, which used ``SettingsManager`` to read
+        ``data/defaults/settings.cfg`` and overlay ``~/.mdmix/settings.cfg``.
+
+        Parameters
+        ----------
+        user_cfg : str | Path | None
+            Path to the user settings file.  Defaults to
+            ``~/.mdmix/settings.cfg``.
+
+        Returns
+        -------
+        Config
+            Configured instance with defaults applied and user overrides merged.
+        """
+        from pymdmix.utils.settings_parser import SettingsManager
+        from pymdmix.utils.tools import defaults_root
+
+        default_cfg = defaults_root("settings.cfg")
+        user_path = Path(user_cfg).expanduser() if user_cfg else Path("~/.mdmix/settings.cfg").expanduser()
+
+        manager = SettingsManager(
+            f_default=default_cfg,
+            f_user=user_path,
+            create_missing=True,
+            verbose=False,
+        )
+        manager.update_namespace({}, keep_defined=False)  # trigger file creation only
+        settings = manager.settings_to_dict()
+
+        # Map settings.cfg keys → Config field names
+        _cfg_map: dict[str, str] = {
+            "AMBER_TLEAP": "tleap_exe",
+            "AMBER_PTRAJ": "cpptraj_exe",
+            "AMBER_PROD_EXE": "pmemd_exe",
+            "DEF_NREPLICAS": "n_replicas",
+            "DEF_AMBER_FF": "protein_ff",  # list → first element used
+        }
+
+        kwargs: dict[str, Any] = {}
+        for cfg_key, field_name in _cfg_map.items():
+            if cfg_key in settings and settings[cfg_key] is not None:
+                val = settings[cfg_key]
+                if field_name == "protein_ff" and isinstance(val, list):
+                    # Use first FF from list; fall back to the dataclass default
+                    fld = next(
+                        (f for f in dataclasses.fields(cls) if f.name == "protein_ff"), None
+                    )
+                    default_ff = fld.default if fld is not None else "leaprc.protein.ff19SB"
+                    val = val[0] if val else default_ff
+                kwargs[field_name] = val
+
+        return cls(**kwargs)
+
 
 def get_default_config() -> Config:
     """
-    Get default configuration, reading from environment.
+    Get default configuration, reading from environment and package defaults.
+
+    Loads package defaults from ``data/defaults/settings.cfg`` and overlays
+    user-supplied overrides from ``~/.mdmix/settings.cfg`` when present
+    (creating the file automatically on first run if it does not exist).
 
     Returns
     -------
     Config
-        Configuration with defaults and environment variables
+        Configuration with defaults, environment variables, and user overrides.
     """
-    return Config()
+    try:
+        return Config.from_defaults()
+    except Exception:
+        # Fall back to plain defaults if the defaults file is unavailable
+        return Config()

@@ -168,6 +168,26 @@ def solvents_root(file: str | None = None) -> Path:
     return base
 
 
+def defaults_root(file: str | None = None) -> Path:
+    """
+    Get the package defaults directory (``data/defaults/``).
+
+    Parameters
+    ----------
+    file : str | None
+        Optional filename within the defaults directory.
+
+    Returns
+    -------
+    Path
+        Absolute path to the defaults directory (or file within it).
+    """
+    base = data_root("defaults")
+    if file:
+        return base / file
+    return base
+
+
 def absfile(filename: str | Path) -> Path:
     """
     Get absolute path with ~ expansion.
@@ -634,6 +654,7 @@ dataRoot = data_root
 testRoot = test_root
 templatesRoot = templates_root
 solventsRoot = solvents_root
+defaultsRoot = defaults_root
 validPath = valid_path
 validBinary = valid_binary
 filePermission = file_permissions
@@ -647,6 +668,7 @@ tracebackPlus = traceback_plus
 if __name__ == "__main__":
     print(f"Project root: {project_root()}")
     print(f"Data root: {data_root()}")
+    print(f"Defaults root: {defaults_root()}")
     print(f"Solvents root: {solvents_root()}")
 
     # Test nested list flattening
