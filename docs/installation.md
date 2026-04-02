@@ -8,12 +8,23 @@
 
 ## Installation Methods
 
-### Using pip (recommended)
+### Using uv (recommended)
 
 ```bash
 # Clone the repository
-git clone https://github.com/DAlvGar/pyMDmix.git
-cd pyMDmix
+git clone https://github.com/DAlvGar/pymdmix2.git
+cd pymdmix2
+
+# Install all dependencies (including dev and optional extras)
+uv sync --all-extras
+```
+
+### Using pip
+
+```bash
+# Clone the repository
+git clone https://github.com/DAlvGar/pymdmix2.git
+cd pymdmix2
 
 # Install in development mode
 pip install -e ".[dev]"
@@ -27,8 +38,8 @@ conda create -n mdmix python=3.10 ambertools -c conda-forge
 conda activate mdmix
 
 # Clone and install pyMDMix
-git clone https://github.com/DAlvGar/pyMDmix.git
-cd pyMDmix
+git clone https://github.com/DAlvGar/pymdmix2.git
+cd pymdmix2
 pip install -e ".[dev]"
 ```
 
@@ -48,7 +59,7 @@ pymdmix --version
 pymdmix info solvents
 
 # Run tests
-pytest tests/ -q
+uv run pytest tests/ -q
 ```
 
 ## Environment Variables

@@ -4,7 +4,7 @@ A modern Python toolkit for molecular dynamics simulations with organic solvent 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-621%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-698%20passed-brightgreen.svg)]()
 
 ## Overview
 
