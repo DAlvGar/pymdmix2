@@ -13,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import configparser
 import sys
 from pathlib import Path
 from typing import Literal, cast
@@ -90,7 +91,16 @@ def create() -> None:
 
 @create.command("project")
 @click.option("-n", "--name", default="mdmix_project", help="Project name")
-@click.option("-f", "--config", type=click.Path(exists=True), help="Configuration file")
+@click.option(
+    "-f",
+    "--config",
+    type=click.Path(exists=True),
+    help=(
+        "Configuration file. Can be a full project config with [SYSTEM] and "
+        "[MDSETTINGS] sections (the primary workflow), or a global config "
+        "in YAML/JSON format."
+    ),
+)
 @click.option("-d", "--directory", type=click.Path(), help="Project directory (default: ./<name>)")
 @click.option("--force", is_flag=True, help="Overwrite existing project")
 @click.pass_context
@@ -99,9 +109,24 @@ def create_project(
 ) -> None:
     """Create a new pyMDMix project.
 
-    Examples:
+    PRIMARY WORKFLOW — pass a full project config file that contains both a
+    [SYSTEM] section and a [MDSETTINGS] section.  The project is created and
+    all replicas are added in a single step:
+
+    \b
+        pymdmix create project -n myproject -f project.cfg
+
+    Get a ready-to-edit template with:
+
+    \b
+        pymdmix create template
+
+    You can also create an empty project and add system/replicas separately:
+
+    \b
         pymdmix create project -n myproject
-        pymdmix create project -n myproject -f config.yaml
+        pymdmix add system -f system.cfg
+        pymdmix add replica -f settings.cfg
     """
     from pymdmix.project import Config, Project
 
@@ -119,17 +144,155 @@ def create_project(
 
     click.echo(f"Creating project '{name}' in {project_dir}")
 
+    # ------------------------------------------------------------------
+    # Determine if the config file is a full project cfg ([SYSTEM] + [MDSETTINGS])
+    # or a YAML/JSON global config.
+    # ------------------------------------------------------------------
+    is_project_cfg = False
     if config:
-        cfg = Config.from_file(Path(config))
+        config_path = Path(config)
+        if config_path.suffix in (".cfg", ".ini"):
+            _parser = configparser.ConfigParser()
+            _parser.read(config_path)
+            is_project_cfg = "SYSTEM" in _parser.sections()
+
+    if config and is_project_cfg:
+        # ---- Full project config file ----------------------------------------
+        # Parse *before* creating any directories so we fail cleanly on errors.
+        from pymdmix.io.parsers import parse_project_config
+
         if verbose:
-            click.echo(f"  Loaded config from {config}")
+            click.echo(f"  Parsing full project config: {config}")
+
+        try:
+            proj_cfg = parse_project_config(config_path)
+        except Exception as e:
+            click.secho(f"✗ Failed to parse project config: {e}", fg="red")
+            sys.exit(1)
+
+        # Now create directory structure
+        project = Project(name=name, config=Config(), path=project_dir)
+        project.create_directories()
+
+        # Register system
+        system_cfg = proj_cfg.system
+        project.pdb_file = str(system_cfg.input_file)
+        project.systems[system_cfg.name] = {
+            "name": system_cfg.name,
+            "input_file": str(system_cfg.input_file),
+            "unit_name": system_cfg.unit_name,
+            "extra_residues": system_cfg.extra_residues,
+            "extra_forcefields": system_cfg.extra_forcefields,
+        }
+
+        # Store the config file in the project's input folder
+        destination = project.input_path / config_path.name
+        destination.write_text(config_path.read_text())
+
+        if verbose:
+            click.echo(f"  System: {system_cfg.name} ({system_cfg.input_file})")
+
+        # Add replicas
+        from pymdmix.project.replica import create_replica
+
+        for md_settings in proj_cfg.settings:
+            solvent = md_settings.solvent
+            existing = [r for r in project.replicas if r.solvent == solvent]
+            idx = len(existing) + 1
+            rep_name = f"{system_cfg.name}_{solvent}_{idx}"
+            replica = create_replica(
+                name=rep_name,
+                solvent=solvent,
+                base_path=project.replicas_path,
+                settings=md_settings,
+            )
+            project.replicas.append(replica)
+
+        project.save()
+
+        n_replicas = len(proj_cfg.settings)
+        solvents = list({s.solvent for s in proj_cfg.settings})
+        click.secho(f"✓ Project '{name}' created", fg="green")
+        click.echo(f"  System:   {system_cfg.name}")
+        click.echo(f"  Solvents: {', '.join(solvents)}")
+        click.echo(f"  Replicas: {n_replicas}")
+        for replica in project.replicas:
+            click.echo(f"    - {replica.name}")
+
+    elif config:
+        # ---- YAML/JSON global config file ------------------------------------
+        try:
+            global_cfg = Config.from_file(Path(config))
+        except Exception as e:
+            click.secho(f"✗ Failed to load config: {e}", fg="red")
+            sys.exit(1)
+        project = Project(name=name, config=global_cfg, path=project_dir)
+        project.create_directories()
+        project.save()
+        if verbose:
+            click.echo(f"  Loaded global config from {config}")
+        click.secho(f"✓ Project '{name}' created successfully", fg="green")
     else:
-        cfg = Config()
+        # ---- Empty project ---------------------------------------------------
+        project = Project(name=name, config=Config(), path=project_dir)
+        project.create_directories()
+        project.save()
+        click.secho(f"✓ Project '{name}' created successfully", fg="green")
+        click.echo(
+            "  Next steps:\n"
+            "    pymdmix add system -f system.cfg\n"
+            "    pymdmix add replica -f settings.cfg\n"
+            "\n"
+            "  Or create a project from a single config file:\n"
+            "    pymdmix create template            # get an editable template\n"
+            "    pymdmix create project -n myproject -f project.cfg"
+        )
 
-    project = Project(name=name, config=cfg, path=project_dir)
-    project.save()
 
-    click.secho(f"✓ Project '{name}' created successfully", fg="green")
+@create.command("template")
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    type=click.Path(),
+    default="project.cfg",
+    show_default=True,
+    help="Output path for the template file.",
+)
+@click.pass_context
+def create_template(ctx: click.Context, output_path: str) -> None:
+    """Save an annotated project configuration template.
+
+    The template contains a [SYSTEM] section and a [MDSETTINGS] section with
+    all supported options and their default values.  Edit the template and pass
+    it to  pymdmix create project  to bootstrap a new project in one step.
+
+    \b
+    Examples:
+        pymdmix create template
+        pymdmix create template -o /path/to/my_project.cfg
+    """
+    import shutil
+
+    from pymdmix.utils.tools import templates_root
+
+    src = templates_root("project.cfg")
+    if not src.exists():
+        click.secho(f"✗ Template not found: {src}", fg="red")
+        sys.exit(1)
+
+    dest = Path(output_path)
+    if dest.exists():
+        click.secho(f"✗ File already exists: {dest}", fg="red")
+        click.echo("  Remove it first or choose a different output path.")
+        sys.exit(1)
+
+    shutil.copy(src, dest)
+    click.secho(f"✓ Template saved to {dest}", fg="green")
+    click.echo(
+        "  Edit the template, then create your project with:\n"
+        f"    pymdmix create project -n myproject -f {dest}"
+    )
 
 
 @create.command("solvent")
@@ -251,7 +414,10 @@ def add_system(ctx: click.Context, config: str, project: str) -> None:
     "config",
     type=click.Path(exists=True),
     required=True,
-    help="Replica configuration file",
+    help=(
+        "Configuration file. Accepts both a [MDSETTINGS] cfg file (primary) "
+        "and a legacy [REPLICA] cfg file."
+    ),
 )
 @click.option(
     "-p",
@@ -260,62 +426,142 @@ def add_system(ctx: click.Context, config: str, project: str) -> None:
     default=".",
     help="Project directory (default: current)",
 )
-@click.option("--count", type=int, default=1, help="Number of replicas to create")
+@click.option(
+    "--count",
+    type=int,
+    default=None,
+    help=(
+        "Number of replicas per solvent (overrides NREPL in the config). "
+        "Only used with [REPLICA] format; [MDSETTINGS] files define replica "
+        "counts via NREPL."
+    ),
+)
 @click.pass_context
-def add_replica(ctx: click.Context, config: str, project: str, count: int) -> None:
+def add_replica(ctx: click.Context, config: str, project: str, count: int | None) -> None:
     """Add replica(s) to the project from a configuration file.
 
-    The configuration file should contain:
-    - SYSTEM: System name (must exist in project)
-    - SOLVENT: Solvent name (e.g., ETA, MAM)
-    - NANOS: Production length in nanoseconds
-    - RESTRMODE: Restraint mode (FREE, BB, HA, CUSTOM)
+    PRIMARY WORKFLOW — use a [MDSETTINGS] configuration file that lists
+    solvents, number of replicas, and simulation parameters:
+
+    \b
+        pymdmix add replica -f settings.cfg
+
+    Example settings.cfg:
+
+    \b
+        [MDSETTINGS]
+        SOLVENTS = ETA, MAM
+        NREPL = 3
+        NANOS = 20
+        TEMP = 300
+        RESTR = FREE
+
+    Alternatively, use the legacy [REPLICA] format for a single solvent:
+
+    \b
+        [REPLICA]
+        SYSTEM = MyProtein
+        SOLVENT = ETA
+        NANOS = 20
+        RESTRMODE = FREE
 
     Examples:
-        pymdmix add replica -f replica.cfg
+        pymdmix add replica -f settings.cfg
         pymdmix add replica -f replica.cfg --count 3
     """
-    from pymdmix.io.parsers import parse_replica_config
     from pymdmix.project import Project
+    from pymdmix.project.replica import create_replica
 
     verbose = ctx.obj.get("verbose", False)
     project_path = Path(project)
     config_path = Path(config)
 
+    # Detect file type by inspecting sections
+    _parser = configparser.ConfigParser()
+    _parser.read(config_path)
+    sections = _parser.sections()
+    has_mdsettings = any(s.startswith("MDSETTINGS") for s in sections)
+
     # Load project
     proj = Project.load(project_path)
 
-    # Parse replica config
-    replica_config = parse_replica_config(config_path)
+    if has_mdsettings:
+        # ---- [MDSETTINGS] workflow (primary) ---------------------------------
+        from pymdmix.io.parsers import parse_settings_config_file
 
-    if verbose:
-        click.echo(f"  System: {replica_config.system}")
-        click.echo(f"  Solvent: {replica_config.solvent}")
-        click.echo(f"  Nanoseconds: {replica_config.nanos}")
-
-    # Create replica(s)
-    created = proj.add_replicas(solvent=replica_config.solvent, n_replicas=count)
-    created_names = [r.name for r in created]
-    for replica in created:
-        if replica.settings:
-            replica.settings.nanos = replica_config.nanos
-            replica.settings.restraint_mode = replica_config.restraint_mode
-            if replica_config.restraint_mask:
-                replica.settings.restraint_mask = replica_config.restraint_mask
-            replica.settings.restraint_force = replica_config.restraint_force
-            if replica_config.align_mask:
-                replica.settings.align_mask = replica_config.align_mask
         if verbose:
-            click.echo(f"  Created: {replica.name}")
+            click.echo(f"  Parsing [MDSETTINGS] config: {config_path.name}")
 
-    proj.save()
+        try:
+            settings_list = parse_settings_config_file(config_path)
+        except Exception as e:
+            click.secho(f"✗ Failed to parse settings config: {e}", fg="red")
+            sys.exit(1)
 
-    if count == 1:
-        click.secho(f"✓ Replica '{created_names[0]}' added to project", fg="green")
+        # Determine system name (first system in project, or from config)
+        system_name = None
+        if proj.systems:
+            system_name = next(iter(proj.systems))
+
+        created_names = []
+        for md_settings in settings_list:
+            solvent = md_settings.solvent
+            existing = [r for r in proj.replicas if r.solvent == solvent]
+            idx = len(existing) + 1
+            prefix = f"{system_name}_" if system_name else ""
+            rep_name = f"{prefix}{solvent}_{idx}"
+            replica = create_replica(
+                name=rep_name,
+                solvent=solvent,
+                base_path=proj.replicas_path,
+                settings=md_settings,
+            )
+            proj.replicas.append(replica)
+            created_names.append(rep_name)
+            if verbose:
+                click.echo(f"  Created: {rep_name}")
+
+        proj._update_modified()
+        proj.save()
+
+        click.secho(f"✓ {len(created_names)} replica(s) added to project", fg="green")
+        for rname in created_names:
+            click.echo(f"    - {rname}")
+
     else:
-        click.secho(f"✓ {count} replicas added to project", fg="green")
-        for name in created_names:
-            click.echo(f"    - {name}")
+        # ---- [REPLICA] legacy workflow ----------------------------------------
+        from pymdmix.io.parsers import parse_replica_config
+
+        replica_config = parse_replica_config(config_path)
+
+        if verbose:
+            click.echo(f"  System: {replica_config.system}")
+            click.echo(f"  Solvent: {replica_config.solvent}")
+            click.echo(f"  Nanoseconds: {replica_config.nanos}")
+
+        n = count if count is not None else 1
+        created = proj.add_replicas(solvent=replica_config.solvent, n_replicas=n)
+        created_names = [r.name for r in created]
+        for replica in created:
+            if replica.settings:
+                replica.settings.nanos = replica_config.nanos
+                replica.settings.restraint_mode = replica_config.restraint_mode
+                if replica_config.restraint_mask:
+                    replica.settings.restraint_mask = replica_config.restraint_mask
+                replica.settings.restraint_force = replica_config.restraint_force
+                if replica_config.align_mask:
+                    replica.settings.align_mask = replica_config.align_mask
+            if verbose:
+                click.echo(f"  Created: {replica.name}")
+
+        proj.save()
+
+        if n == 1:
+            click.secho(f"✓ Replica '{created_names[0]}' added to project", fg="green")
+        else:
+            click.secho(f"✓ {n} replicas added to project", fg="green")
+            for rname in created_names:
+                click.echo(f"    - {rname}")
 
 
 @add.command("group")

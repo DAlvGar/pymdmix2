@@ -42,8 +42,10 @@ from pymdmix.io.parsers import (
     MDSettingsConfigFileParser,
     MDSettingsParserError,
     ParserError,
+    ProjectConfig,
     SystemConfigFileParser,
     SystemParserError,
+    parse_project_config,
     parse_settings_config_file,
 )
 from pymdmix.io.plotting import (
@@ -67,7 +69,9 @@ __all__ = [
     # Config parsers
     "SystemConfigFileParser",
     "MDSettingsConfigFileParser",
+    "parse_project_config",
     "parse_settings_config_file",
+    "ProjectConfig",
     "ParserError",
     "SystemParserError",
     "BadFile",

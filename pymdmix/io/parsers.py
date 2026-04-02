@@ -970,7 +970,7 @@ def parse_settings_config_file(
     config_file: str | Path,
     no_solvent: bool = False,
     default_nreplicas: int | None = None,
-) -> list[Any]:
+) -> list[MDSettings] | list[dict[str, Any]]:
     """
     Parse a settings config file and return :class:`~pymdmix.project.settings.MDSettings` objects.
 
@@ -992,8 +992,8 @@ def parse_settings_config_file(
     Returns
     -------
     list[MDSettings]
-        One ``MDSettings`` per solvent × replica combination, or a single dict
-        if ``no_solvent=True``.
+        One ``MDSettings`` per solvent × replica combination, or a single
+        settings dict if ``no_solvent=True``.
 
     Raises
     ------
@@ -1006,3 +1006,94 @@ def parse_settings_config_file(
     if no_solvent:
         return [parser.parse_no_solvent(config_file)]
     return parser.parse_to_mdsettings(config_file, default_nreplicas=default_nreplicas)
+
+
+@dataclass
+class ProjectConfig:
+    """
+    Parsed full project configuration (combines system + MD settings).
+
+    This is the result of reading a combined project ``.cfg`` file that contains
+    both a ``[SYSTEM]`` section and one or more ``[MDSETTINGS]`` sections.
+    It represents the complete setup needed to bootstrap a pyMDMix project
+    from a single configuration file.
+
+    Attributes
+    ----------
+    system : SystemConfig
+        Parsed system definition.
+    settings : list[Any]
+        List of :class:`~pymdmix.project.settings.MDSettings` objects, one per
+        solvent × replica combination.
+
+    Examples
+    --------
+    >>> cfg = parse_project_config("project.cfg")
+    >>> print(cfg.system.name)
+    'MyProtein'
+    >>> len(cfg.settings)
+    3
+    """
+
+    system: SystemConfig
+    settings: list[MDSettings]
+
+
+def parse_project_config(
+    config_file: str | Path,
+    default_nreplicas: int | None = None,
+) -> ProjectConfig:
+    """
+    Parse a *full* project configuration file.
+
+    A full project config contains both a ``[SYSTEM]`` section and one or more
+    ``[MDSETTINGS]`` sections — the canonical format supported by the original
+    pyMDMix.  This function is the primary entry-point for project
+    initialisation:
+
+    .. code-block:: bash
+
+        pymdmix create project -n myproject -f project.cfg
+
+    The companion CLI command calls this function, then registers the system and
+    creates all replicas in a single step.
+
+    Parameters
+    ----------
+    config_file : str | Path
+        Path to the combined ``.cfg`` file with ``[SYSTEM]`` and
+        ``[MDSETTINGS]`` sections.
+    default_nreplicas : int | None
+        Default replica count used when ``NREPL`` is absent.  ``None`` reads
+        the value from ``data/defaults/settings.cfg`` (``DEF_NREPLICAS``).
+
+    Returns
+    -------
+    ProjectConfig
+        Parsed project configuration with ``system`` and ``settings`` fields.
+
+    Raises
+    ------
+    BadFile
+        If the config file does not exist.
+    SystemParserError
+        If the ``[SYSTEM]`` section is missing or invalid.
+    MDSettingsParserError
+        If no ``[MDSETTINGS]`` section is found or parsing fails.
+
+    Examples
+    --------
+    >>> cfg = parse_project_config("project.cfg")
+    >>> print(cfg.system.name, len(cfg.settings))
+    MyProtein 6
+    """
+    config_file = Path(config_file)
+    if not config_file.exists():
+        raise BadFile(f"Config file not found: {config_file}")
+
+    system_cfg = parse_system_config(config_file)
+    settings_list = parse_settings_config_file(
+        config_file, default_nreplicas=default_nreplicas
+    )
+    return ProjectConfig(system=system_cfg, settings=settings_list)
+
