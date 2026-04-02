@@ -169,6 +169,212 @@ pymdmix analyze energy all
 pymdmix analyze hotspots all --threshold -0.5
 ```
 
+## Cloud Execution on AWS EC2 GPU Instances
+
+pyMDMix2 can launch MD replicas directly on AWS EC2 GPU instances (`g4dn.xlarge` and
+similar), upload input data to S3, and automatically download results when the simulation
+finishes — all from the CLI.
+
+> **Note:** All existing local and HPC workflows are completely unaffected.
+> The cloud feature is opt-in and requires the `cloud` extras.
+
+### Prerequisites
+
+1. **AWS account** with permissions for EC2, S3, and STS.
+2. **An S3 bucket** for staging data (e.g. `my-pymdmix-staging`).
+3. **An EC2 key pair** in the target region (download the `.pem` private key).
+4. **A security group** that allows inbound SSH (TCP 22) from your IP.
+5. Optional but recommended: an IAM instance profile with S3 read/write permissions,
+   so the instance never needs static credentials.
+
+### Installation
+
+```bash
+# Install the cloud extras (boto3 + paramiko)
+pip install "pymdmix[cloud]"
+# or with uv:
+uv sync --extra cloud
+```
+
+### AWS Credentials
+
+pyMDMix2 **never stores AWS credentials** in the project config. It relies on the
+standard boto3 credential chain:
+
+| Method | How |
+|--------|-----|
+| Environment variables | `export AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=…` |
+| Shared credentials file | `~/.aws/credentials` (created by `aws configure`) |
+| IAM instance profile | Automatic when running on EC2 |
+
+Store the path to your SSH private key in an environment variable:
+
+```bash
+export PYMDMIX_AWS_KEY_PATH=/path/to/my-keypair.pem
+```
+
+### Verify credentials
+
+```bash
+pymdmix cloud test-connection
+# ✓ AWS credentials are valid
+#   Account:  123456789012
+#   User ARN: arn:aws:iam::123456789012:user/me
+```
+
+### Configure a project for cloud execution
+
+Run the interactive wizard once per project:
+
+```bash
+cd my_project
+pymdmix cloud configure
+```
+
+Or pass all options as flags (suitable for CI/automation):
+
+```bash
+pymdmix cloud configure \
+  --region      us-east-1 \
+  --instance-type g4dn.xlarge \
+  --key-pair    my-keypair \
+  --s3-bucket   my-pymdmix-staging \
+  --s3-prefix   pymdmix/ \
+  --ami-id      ami-0abc123def456     # optional: skip bootstrap install
+```
+
+Settings are saved to the project config file. To inspect available AMIs and
+instance type pricing:
+
+```bash
+pymdmix cloud list-amis
+pymdmix cloud estimated-cost          # rough cost estimate for all pending replicas
+pymdmix cloud estimated-cost --hours 6
+```
+
+#### AMI Strategy
+
+| Option | How | Startup time |
+|--------|-----|-------------|
+| **Pre-baked AMI** (recommended) | Set `--ami-id` to an Ubuntu 22.04 + CUDA + AmberTools 23 AMI | ~3 min |
+| **Bootstrap AMI** | Leave `ami-id` blank — AmberTools is installed on first boot | ~13 min |
+
+AMI IDs are maintained in `pymdmix/data/cloud/amis.json` (publication in progress).
+
+### Launching replicas
+
+```bash
+# Launch a single replica and wait (optionally stream the log)
+pymdmix run replica ETA_1
+pymdmix run replica ETA_1 --watch          # stream bootstrap.log via SSH
+
+# Launch all pending replicas in parallel
+pymdmix run all
+pymdmix run all --max-parallel 4           # limit to 4 concurrent instances
+
+# Dry run — show what would happen without spending money
+pymdmix run all --dry-run
+```
+
+What happens under the hood:
+1. Input files (`*.prmtop`, `*.inpcrd`, `*.in`, `COMMANDS.sh`) are uploaded to S3.
+2. An EC2 Spot instance is launched with a cloud-init bootstrap script.
+3. The instance downloads the inputs, runs `bash COMMANDS.sh`, uploads results, then writes a `DONE` sentinel to S3.
+4. Optionally, the instance self-terminates.
+
+### Monitoring progress
+
+```bash
+# Show cached status (fast, no AWS calls)
+pymdmix run status
+
+# Poll AWS + S3 for live updates and auto-download completed results
+pymdmix run status --poll
+```
+
+Example output:
+
+```
+REPLICA                        STATE        INSTANCE             IP               ELAPSED
+------------------------------------------------------------------------
+ETA_1                          running      i-0a1b2c3d4e5f678   1.2.3.4          00:47:12
+ETA_2                          done         i-0b2c3d4e5f6789a   —                01:03:45
+MAM_1                          launching    i-0c3d4e5f678901b   —                00:01:02
+```
+
+### Streaming logs
+
+```bash
+# Tail the bootstrap log via SSH (requires PYMDMIX_AWS_KEY_PATH)
+pymdmix run logs ETA_1
+
+# Fetch the last-synced log from S3 (no SSH key needed)
+pymdmix run logs ETA_1 --s3
+```
+
+### Retrieving results
+
+Results are automatically downloaded when `pymdmix run status --poll` detects a
+`DONE` sentinel. To trigger a manual download:
+
+```bash
+pymdmix run fetch ETA_1
+```
+
+### Cancelling a job
+
+```bash
+pymdmix run cancel ETA_1            # terminates the EC2 instance (default)
+pymdmix run cancel ETA_1 --no-terminate  # stops without terminating (cheaper resume)
+```
+
+### Full cloud workflow example
+
+```bash
+# 0. One-time setup
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export PYMDMIX_AWS_KEY_PATH=~/keys/my-keypair.pem
+
+pip install "pymdmix[cloud]"
+pymdmix cloud test-connection
+
+# 1. Create project and replicas (same as local workflow)
+pymdmix create project -n my_project
+cd my_project
+pymdmix add system -f system.cfg
+pymdmix add replica -f replica.cfg --count 3
+
+# 2. Configure AWS settings
+pymdmix cloud configure \
+  --region us-east-1 \
+  --key-pair my-keypair \
+  --s3-bucket my-staging-bucket \
+  --instance-type g4dn.xlarge
+
+# 3. Launch all replicas on EC2
+pymdmix run all
+
+# 4. Monitor and auto-fetch results
+watch -n 60 "pymdmix run status --poll"
+
+# 5. Analyse locally once all replicas are done
+pymdmix analyze align all
+pymdmix analyze density all
+pymdmix analyze hotspots all --threshold -0.5
+```
+
+### Security notes
+
+- **AWS credentials** are never stored in project files — use env vars or `~/.aws/credentials`.
+- **SSH private key** path is stored only in `PYMDMIX_AWS_KEY_PATH` (env var); never committed.
+- SSH host key validation is enforced (`RejectPolicy`). Add the instance's key with
+  `ssh-keyscan <ip> >> ~/.ssh/known_hosts` before using `--watch` or `pymdmix run logs`.
+- Use `iam_instance_profile` (set during `cloud configure`) to give the EC2 instance
+  S3 access without any static AWS credentials on the instance.
+- S3 bucket server-side encryption (SSE-S3 or SSE-KMS) is strongly recommended.
+- Set your security group to allow SSH only from your current public IP.
+
 ## Configuration Reference
 
 ### Restraint Modes
@@ -195,10 +401,13 @@ pymdmix analyze hotspots all --threshold -0.5
 pymdmix/
 ├── core/           # Grid, trajectory, structure, solvent
 ├── analysis/       # Density, energy, hotspots, alignment
+├── cloud/          # AWS EC2/S3 cloud execution (boto3, paramiko)
 ├── project/        # Replica, settings, config
 ├── engines/        # Amber, OpenMM, NAMD, GROMACS
 ├── cli.py          # Command-line interface
-└── data/solvents/  # Solvent definitions
+└── data/
+    ├── solvents/   # Solvent definitions
+    └── cloud/      # AMI catalog and instance type pricing
 ```
 
 ## Documentation

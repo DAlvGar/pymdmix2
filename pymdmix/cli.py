@@ -1400,6 +1400,661 @@ def queue_submit(
 
 
 # =============================================================================
+# CLOUD Commands (AWS EC2 configuration & management)
+# =============================================================================
+
+
+@cli.group()
+def cloud() -> None:
+    """Configure and manage AWS cloud resources for running MD replicas on EC2."""
+    pass
+
+
+@cloud.command("configure")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.option("--region", default=None, help="AWS region (e.g. us-east-1)")
+@click.option("--instance-type", default=None, help="EC2 instance type (e.g. g4dn.xlarge)")
+@click.option("--ami-id", default=None, help="AMI ID with AmberTools + CUDA")
+@click.option("--key-pair", default=None, help="EC2 key pair name")
+@click.option("--security-group", default=None, help="Security group ID")
+@click.option("--s3-bucket", default=None, help="S3 bucket for staging")
+@click.option("--s3-prefix", default=None, help="S3 key prefix (default: pymdmix/)")
+@click.option("--no-spot", is_flag=True, default=False, help="Use on-demand instances instead of Spot")
+@click.option("--ebs-size", type=int, default=None, help="EBS volume size in GB (default: 100)")
+@click.pass_context
+def cloud_configure(
+    ctx: click.Context,
+    project: str,
+    region: str | None,
+    instance_type: str | None,
+    ami_id: str | None,
+    key_pair: str | None,
+    security_group: str | None,
+    s3_bucket: str | None,
+    s3_prefix: str | None,
+    no_spot: bool,
+    ebs_size: int | None,
+) -> None:
+    """Interactive wizard to configure AWS settings for a project.
+
+    Settings are saved to the project config file. AWS credentials are
+    NOT stored here — use the standard AWS credential chain instead
+    (env vars AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY or ~/.aws/credentials).
+
+    The path to your SSH private key is read from PYMDMIX_AWS_KEY_PATH
+    environment variable and is never stored in the config.
+
+    Examples:
+        pymdmix cloud configure
+        pymdmix cloud configure --region us-west-2 --s3-bucket my-bucket
+    """
+    from pymdmix.cloud.config import AWSConfig
+    from pymdmix.project import Project
+
+    project_path = Path(project)
+    proj = Project.load(project_path)
+
+    # Load existing aws_config if present
+    existing = proj.config.aws_config or AWSConfig()
+
+    click.echo("AWS Cloud Configuration")
+    click.echo("=" * 40)
+    click.echo("Note: AWS credentials are read from the environment (not stored here).")
+    click.echo("      Set PYMDMIX_AWS_KEY_PATH to the path of your SSH private key (.pem).\n")
+
+    region_val = region or click.prompt("AWS region", default=existing.region)
+    instance_type_val = instance_type or click.prompt(
+        "EC2 instance type", default=existing.instance_type
+    )
+    ami_id_val = ami_id or click.prompt(
+        "AMI ID (leave blank to auto-detect)", default=existing.ami_id or "", show_default=False
+    )
+    key_pair_val = key_pair or click.prompt("EC2 key pair name", default=existing.key_pair_name)
+    security_group_val = security_group or click.prompt(
+        "Security group ID (leave blank to skip)", default=existing.security_group_id or "", show_default=False
+    )
+    s3_bucket_val = s3_bucket or click.prompt("S3 bucket name", default=existing.s3_bucket)
+    s3_prefix_val = s3_prefix or click.prompt("S3 key prefix", default=existing.s3_prefix)
+    ebs_size_val = ebs_size or click.prompt(
+        "EBS volume size (GB)", default=existing.ebs_volume_gb, type=int
+    )
+
+    use_spot = not no_spot if no_spot else click.confirm(
+        "Use Spot instances (cheaper, ~70% cost reduction)?", default=existing.use_spot
+    )
+
+    aws_cfg = AWSConfig(
+        region=region_val,
+        instance_type=instance_type_val,
+        ami_id=ami_id_val or None,
+        key_pair_name=key_pair_val,
+        security_group_id=security_group_val or None,
+        s3_bucket=s3_bucket_val,
+        s3_prefix=s3_prefix_val,
+        use_spot=use_spot,
+        ebs_volume_gb=ebs_size_val,
+    )
+
+    errors = aws_cfg.validate()
+    if errors:
+        click.secho("Configuration errors:", fg="red")
+        for err in errors:
+            click.secho(f"  ✗ {err}", fg="red")
+        sys.exit(1)
+
+    proj.config.aws_config = aws_cfg
+    proj.save()
+    click.secho("✓ AWS configuration saved", fg="green")
+
+
+@cloud.command("test-connection")
+@click.pass_context
+def cloud_test_connection(ctx: click.Context) -> None:
+    """Test AWS credentials by calling STS GetCallerIdentity.
+
+    Verifies that boto3 can authenticate and shows your AWS account info.
+
+    Examples:
+        pymdmix cloud test-connection
+    """
+    from pymdmix.cloud import HAS_BOTO3
+
+    if not HAS_BOTO3:
+        click.secho("✗ boto3 is not installed. Run: pip install pymdmix[cloud]", fg="red")
+        sys.exit(1)
+
+    try:
+        import boto3
+
+        sts = boto3.client("sts")
+        identity = sts.get_caller_identity()
+        click.secho("✓ AWS credentials are valid", fg="green")
+        click.echo(f"  Account:  {identity['Account']}")
+        click.echo(f"  User ARN: {identity['Arn']}")
+        click.echo(f"  User ID:  {identity['UserId']}")
+    except Exception as exc:
+        click.secho(f"✗ AWS authentication failed: {exc}", fg="red")
+        click.echo("  Ensure AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are set,")
+        click.echo("  or that ~/.aws/credentials is configured.")
+        sys.exit(1)
+
+
+@cloud.command("list-amis")
+@click.option("--region", default=None, help="Filter by region")
+@click.pass_context
+def cloud_list_amis(ctx: click.Context, region: str | None) -> None:
+    """Show available pre-baked pymdmix AMIs and recommended instance types.
+
+    Examples:
+        pymdmix cloud list-amis
+        pymdmix cloud list-amis --region us-east-1
+    """
+    from pymdmix.cloud.config import load_ami_catalog
+
+    catalog = load_ami_catalog()
+    click.echo(
+        f"pymdmix AMI Catalog  "
+        f"(AmberTools {catalog['ambertools_version']}, "
+        f"CUDA {catalog['cuda_version']}, "
+        f"{catalog['base_os']})"
+    )
+    click.echo("")
+
+    click.echo("Regions:")
+    for r, info in catalog["regions"].items():
+        if region and r != region:
+            continue
+        ami = info.get("ami_id") or "— (not yet published)"
+        click.echo(f"  {r:<20} {ami:<25}  {info['description']}")
+
+    click.echo("")
+    click.echo("Recommended instance types:")
+    for itype, info in catalog["instance_types"].items():
+        spot = f"${info['spot_usd_hr_approx']:.2f}/hr Spot" if info.get("spot_usd_hr_approx") else ""
+        click.echo(
+            f"  {itype:<18} {info['gpu_type']:<22} "
+            f"${info['on_demand_usd_hr']:.3f}/hr on-demand  {spot}"
+        )
+        click.echo(f"    → {info['recommended_for']}")
+
+
+@cloud.command("estimated-cost")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.option("--hours", type=float, default=None, help="Estimated MD hours per replica")
+@click.pass_context
+def cloud_estimated_cost(ctx: click.Context, project: str, hours: float | None) -> None:
+    """Estimate AWS cost for running all replicas.
+
+    Examples:
+        pymdmix cloud estimated-cost
+        pymdmix cloud estimated-cost --hours 4
+    """
+    from pymdmix.cloud.config import load_ami_catalog
+    from pymdmix.project import Project
+
+    project_path = Path(project)
+    proj = Project.load(project_path)
+
+    aws_cfg = proj.config.aws_config
+    if aws_cfg is None:
+        click.secho("✗ No AWS configuration found. Run: pymdmix cloud configure", fg="red")
+        sys.exit(1)
+
+    catalog = load_ami_catalog()
+    instance_info = catalog["instance_types"].get(aws_cfg.instance_type)
+
+    pending_replicas = [r for r in proj.replicas if r.state.name not in ("COMPLETE", "ANALYZED")]
+    n_replicas = len(pending_replicas)
+
+    if n_replicas == 0:
+        click.echo("No pending replicas found.")
+        return
+
+    if hours is None:
+        # Rough estimate: 20 ns × default nanos, 1 ns/hr on T4
+        sample = pending_replicas[0]
+        nanos = (sample.settings.nanos if sample.settings else 20)
+        hours = nanos  # ~1 ns/hr on T4
+
+    if instance_info:
+        on_demand = instance_info["on_demand_usd_hr"]
+        spot = instance_info.get("spot_usd_hr_approx", on_demand * 0.3)
+        rate = spot if aws_cfg.use_spot else on_demand
+        mode = "Spot" if aws_cfg.use_spot else "On-demand"
+    else:
+        on_demand = 0.526  # g4dn.xlarge default
+        spot = 0.16
+        rate = spot if aws_cfg.use_spot else on_demand
+        mode = "Spot (estimated)" if aws_cfg.use_spot else "On-demand (estimated)"
+
+    total = n_replicas * hours * rate
+
+    click.echo(f"Replicas to run:    {n_replicas}")
+    click.echo(f"Instance type:      {aws_cfg.instance_type}")
+    click.echo(f"Pricing mode:       {mode} (${rate:.3f}/hr per instance)")
+    click.echo(f"Estimated time:     {hours:.1f} hr/replica")
+    click.echo(f"Estimated cost:     ${total:.2f} USD")
+    click.echo(f"  ({n_replicas} × {hours:.1f} hr × ${rate:.3f}/hr)")
+    click.echo("")
+    click.echo("Note: Estimates are approximate. Actual cost depends on region pricing,")
+    click.echo("      data transfer, and EBS storage charges.")
+
+
+# =============================================================================
+# RUN Commands (user-facing cloud execution)
+# =============================================================================
+
+
+@cli.group()
+def run() -> None:
+    """Launch MD replicas on AWS EC2 GPU instances."""
+    pass
+
+
+def _get_aws_config_or_exit(project):  # type: ignore[return]
+    """Load AWS config from project or exit with an error."""
+    aws_cfg = project.config.aws_config
+    if aws_cfg is None:
+        click.secho("✗ No AWS configuration found. Run: pymdmix cloud configure", fg="red")
+        sys.exit(1)
+    return aws_cfg
+
+
+@run.command("replica")
+@click.argument("replica_name")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.option("--watch", is_flag=True, help="Stream bootstrap log via SSH after launch")
+@click.option("--dry-run", is_flag=True, help="Show what would be done without launching")
+@click.pass_context
+def run_replica(
+    ctx: click.Context, replica_name: str, project: str, watch: bool, dry_run: bool
+) -> None:
+    """Upload and launch a single replica on an EC2 GPU instance.
+
+    The replica must be in READY state (MD input files already generated).
+
+    Examples:
+        pymdmix run replica ETA_1
+        pymdmix run replica ETA_1 --watch
+    """
+    from pymdmix.cloud.ec2 import EC2Manager
+    from pymdmix.cloud.monitor import JOB_LAUNCHING, JobRegistry, RunJob
+    from pymdmix.cloud.transfer import S3Transfer
+    from pymdmix.project import Project
+
+    project_path = Path(project)
+    proj = Project.load(project_path)
+    aws_cfg = _get_aws_config_or_exit(proj)
+
+    replica = proj.get_replica(replica_name)
+    if replica is None:
+        click.secho(f"✗ Replica not found: {replica_name}", fg="red")
+        sys.exit(1)
+
+    if replica.state.name == "COMPLETE":
+        click.secho(f"✗ Replica '{replica_name}' is already COMPLETE", fg="yellow")
+        sys.exit(0)
+
+    if dry_run:
+        click.echo(f"[dry-run] Would upload replica '{replica_name}' to {aws_cfg.s3_uri(replica_name)}")
+        click.echo(f"[dry-run] Would launch EC2 instance: {aws_cfg.instance_type} in {aws_cfg.region}")
+        return
+
+    # Upload input data
+    click.echo(f"Uploading replica '{replica_name}' to S3…")
+    s3 = S3Transfer(aws_cfg)
+    try:
+        uploaded = s3.upload_replica(replica)
+        click.echo(f"  Uploaded {len(uploaded)} files")
+    except Exception as exc:
+        click.secho(f"✗ Upload failed: {exc}", fg="red")
+        sys.exit(1)
+
+    # Build user-data and launch
+
+    ec2 = EC2Manager(aws_cfg)
+    user_data = EC2Manager.build_user_data(replica, aws_cfg)
+
+    click.echo(f"Launching EC2 instance ({aws_cfg.instance_type})…")
+    try:
+        instance_id, public_ip = ec2.launch_instance(replica_name, user_data)
+    except Exception as exc:
+        click.secho(f"✗ Launch failed: {exc}", fg="red")
+        sys.exit(1)
+
+    click.secho(f"✓ Instance launched: {instance_id}", fg="green")
+    if public_ip:
+        click.echo(f"  Public IP: {public_ip}")
+
+    # Register job
+    registry = JobRegistry(project_path)
+    job = RunJob(
+        replica_name=replica_name,
+        instance_id=instance_id,
+        public_ip=public_ip,
+        s3_prefix=aws_cfg.s3_replica_prefix(replica_name),
+        state=JOB_LAUNCHING,
+    )
+    registry.add(job)
+
+    click.echo(f"  Job registered in {project_path / '.cloud_jobs.json'}")
+    click.echo("  Monitor with: pymdmix run status")
+
+    if watch:
+        click.echo("\nWaiting for SSH to become available…")
+        try:
+            ip = ec2.wait_for_ssh(instance_id, timeout_seconds=300)
+        except Exception as exc:
+            click.secho(f"✗ SSH not available: {exc}", fg="red")
+            sys.exit(1)
+
+        key_path = aws_cfg.ssh_key_path
+        if key_path is None:
+            click.secho(
+                "✗ PYMDMIX_AWS_KEY_PATH environment variable not set — cannot stream logs",
+                fg="red",
+            )
+            sys.exit(1)
+
+        from pymdmix.cloud.ssh import tail_remote_log
+
+        log_remote_path = f"/home/{aws_cfg.ssh_user}/pymdmix/{replica_name}/bootstrap.log"
+        click.echo(f"Streaming log from {ip}:{log_remote_path} (Ctrl-C to stop)\n")
+        try:
+            for line in tail_remote_log(ip, key_path, log_remote_path, ssh_user=aws_cfg.ssh_user):
+                click.echo(line, nl=False)
+        except KeyboardInterrupt:
+            click.echo("\nStopped watching (job still running).")
+
+
+@run.command("all")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.option("--max-parallel", type=int, default=0, help="Max concurrent instances (0=all)")
+@click.option("--dry-run", is_flag=True, help="Show what would be done without launching")
+@click.pass_context
+def run_all(ctx: click.Context, project: str, max_parallel: int, dry_run: bool) -> None:
+    """Launch all READY (non-complete) replicas on EC2 GPU instances.
+
+    Each replica gets its own EC2 instance. Use --max-parallel to limit
+    concurrent instances (useful for cost control or quota limits).
+
+    Examples:
+        pymdmix run all
+        pymdmix run all --max-parallel 4
+        pymdmix run all --dry-run
+    """
+    from pymdmix.cloud.ec2 import EC2Manager
+    from pymdmix.cloud.monitor import JOB_LAUNCHING, JobRegistry, RunJob
+    from pymdmix.cloud.transfer import S3Transfer
+    from pymdmix.project import Project
+
+    project_path = Path(project)
+    proj = Project.load(project_path)
+    aws_cfg = _get_aws_config_or_exit(proj)
+
+    pending = [r for r in proj.replicas if r.state.name not in ("COMPLETE", "ANALYZED", "ERROR")]
+    if not pending:
+        click.echo("No pending replicas to run.")
+        return
+
+    if max_parallel > 0:
+        pending = pending[:max_parallel]
+        click.echo(f"Limiting to {max_parallel} replicas (--max-parallel)")
+
+    click.echo(f"Launching {len(pending)} replica(s) on EC2 ({aws_cfg.instance_type})…")
+
+    if dry_run:
+        for replica in pending:
+            click.echo(f"  [dry-run] {replica.name} → {aws_cfg.s3_uri(replica.name)}")
+        return
+
+    s3 = S3Transfer(aws_cfg)
+    ec2 = EC2Manager(aws_cfg)
+    registry = JobRegistry(project_path)
+
+    success = 0
+    failed = 0
+    for replica in pending:
+        try:
+            click.echo(f"  {replica.name}: uploading…", nl=False)
+            s3.upload_replica(replica)
+            user_data = EC2Manager.build_user_data(replica, aws_cfg)
+            instance_id, public_ip = ec2.launch_instance(replica.name, user_data)
+            job = RunJob(
+                replica_name=replica.name,
+                instance_id=instance_id,
+                public_ip=public_ip,
+                s3_prefix=aws_cfg.s3_replica_prefix(replica.name),
+                state=JOB_LAUNCHING,
+            )
+            registry.add(job)
+            click.secho(f" launched ({instance_id})", fg="green")
+            success += 1
+        except Exception as exc:
+            click.secho(f" FAILED: {exc}", fg="red")
+            failed += 1
+
+    click.echo(f"\n✓ Launched {success} instance(s)" + (f", {failed} failed" if failed else ""))
+    click.echo("  Monitor with: pymdmix run status")
+
+
+@run.command("status")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.option("--poll", is_flag=True, help="Poll AWS/S3 for live updates before displaying")
+@click.pass_context
+def run_status(ctx: click.Context, project: str, poll: bool) -> None:
+    """Show status of cloud MD jobs.
+
+    Examples:
+        pymdmix run status
+        pymdmix run status --poll
+    """
+    from pymdmix.cloud.monitor import JobRegistry, poll_all_jobs, print_status_table
+    from pymdmix.project import Project
+
+    project_path = Path(project)
+    proj = Project.load(project_path)
+    registry = JobRegistry(project_path)
+
+    if not registry.jobs:
+        click.echo("No cloud jobs found. Run: pymdmix run replica <name>")
+        return
+
+    if poll:
+        aws_cfg = _get_aws_config_or_exit(proj)
+        click.echo("Polling AWS / S3 for status updates…")
+        jobs = poll_all_jobs(registry, aws_cfg, proj.replicas)
+    else:
+        jobs = registry.jobs
+
+    print_status_table(jobs)
+
+
+@run.command("fetch")
+@click.argument("replica_name")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.pass_context
+def run_fetch(ctx: click.Context, replica_name: str, project: str) -> None:
+    """Manually download results for a replica from S3.
+
+    Useful if the auto-download failed or you want to retrieve partial results.
+
+    Examples:
+        pymdmix run fetch ETA_1
+    """
+    from pymdmix.cloud.transfer import S3Transfer
+    from pymdmix.project import Project
+
+    project_path = Path(project)
+    proj = Project.load(project_path)
+    aws_cfg = _get_aws_config_or_exit(proj)
+
+    replica = proj.get_replica(replica_name)
+    if replica is None:
+        click.secho(f"✗ Replica not found: {replica_name}", fg="red")
+        sys.exit(1)
+
+    click.echo(f"Downloading results for '{replica_name}' from S3…")
+    s3 = S3Transfer(aws_cfg)
+    try:
+        files = s3.download_results(replica)
+        click.secho(f"✓ Downloaded {len(files)} files", fg="green")
+    except Exception as exc:
+        click.secho(f"✗ Download failed: {exc}", fg="red")
+        sys.exit(1)
+
+
+@run.command("cancel")
+@click.argument("replica_name")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.option("--terminate", is_flag=True, default=True, help="Terminate (default) vs. stop instance")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@click.pass_context
+def run_cancel(
+    ctx: click.Context, replica_name: str, project: str, terminate: bool, force: bool
+) -> None:
+    """Cancel a running cloud job and stop/terminate its EC2 instance.
+
+    Examples:
+        pymdmix run cancel ETA_1
+        pymdmix run cancel ETA_1 --no-terminate
+    """
+    from pymdmix.cloud.ec2 import EC2Manager
+    from pymdmix.cloud.monitor import JOB_CANCELLED, JobRegistry
+    from pymdmix.project import Project
+
+    project_path = Path(project)
+    proj = Project.load(project_path)
+    aws_cfg = _get_aws_config_or_exit(proj)
+
+    registry = JobRegistry(project_path)
+    job = registry.get(replica_name)
+    if job is None:
+        click.secho(f"✗ No cloud job found for replica: {replica_name}", fg="red")
+        sys.exit(1)
+
+    if job.instance_id is None:
+        click.secho("✗ Job has no instance ID", fg="red")
+        sys.exit(1)
+
+    action = "terminate" if terminate else "stop"
+    if not force:
+        if not click.confirm(f"{action.capitalize()} instance {job.instance_id} for '{replica_name}'?"):
+            click.echo("Aborted")
+            return
+
+    ec2 = EC2Manager(aws_cfg)
+    try:
+        if terminate:
+            ec2.terminate_instance(job.instance_id)
+        else:
+            ec2.stop_instance(job.instance_id)
+        click.secho(f"✓ Instance {job.instance_id} {action}d", fg="green")
+    except Exception as exc:
+        click.secho(f"✗ Failed to {action} instance: {exc}", fg="red")
+        sys.exit(1)
+
+    job.state = JOB_CANCELLED
+    registry.update(job)
+
+
+@run.command("logs")
+@click.argument("replica_name")
+@click.option(
+    "-p", "--project", type=click.Path(exists=True), default=".", help="Project directory"
+)
+@click.option("--s3", "from_s3", is_flag=True, help="Fetch log from S3 instead of SSH")
+@click.pass_context
+def run_logs(ctx: click.Context, replica_name: str, project: str, from_s3: bool) -> None:
+    """Stream the bootstrap log for a running replica.
+
+    By default uses SSH (requires PYMDMIX_AWS_KEY_PATH). Use --s3 to
+    fetch the last-synced log from S3 instead.
+
+    Examples:
+        pymdmix run logs ETA_1
+        pymdmix run logs ETA_1 --s3
+    """
+    from pymdmix.cloud.monitor import JobRegistry
+    from pymdmix.project import Project
+
+    project_path = Path(project)
+    proj = Project.load(project_path)
+    aws_cfg = _get_aws_config_or_exit(proj)
+
+    registry = JobRegistry(project_path)
+    job = registry.get(replica_name)
+    if job is None:
+        click.secho(f"✗ No cloud job found for replica: {replica_name}", fg="red")
+        sys.exit(1)
+
+    if from_s3:
+        from pymdmix.cloud.transfer import S3Transfer
+
+        replica = proj.get_replica(replica_name)
+        if replica is None:
+            click.secho(f"✗ Replica not found: {replica_name}", fg="red")
+            sys.exit(1)
+        s3 = S3Transfer(aws_cfg)
+        log_content = s3.get_bootstrap_log(replica)
+        if log_content is None:
+            click.echo("Log not yet available in S3.")
+        else:
+            click.echo(log_content)
+        return
+
+    # SSH mode
+    from pymdmix.cloud import HAS_PARAMIKO
+
+    if not HAS_PARAMIKO:
+        click.secho("✗ paramiko is not installed. Run: pip install pymdmix[cloud]", fg="red")
+        click.echo("  Alternatively, use --s3 to fetch the log from S3.")
+        sys.exit(1)
+
+    key_path = aws_cfg.ssh_key_path
+    if key_path is None:
+        click.secho(
+            "✗ PYMDMIX_AWS_KEY_PATH environment variable not set", fg="red"
+        )
+        sys.exit(1)
+
+    ip = job.public_ip
+    if ip is None and job.instance_id:
+        from pymdmix.cloud.ec2 import EC2Manager
+
+        ec2 = EC2Manager(aws_cfg)
+        ip = ec2.get_public_ip(job.instance_id)
+
+    if ip is None:
+        click.secho("✗ No public IP available for this job", fg="red")
+        sys.exit(1)
+
+    from pymdmix.cloud.ssh import tail_remote_log
+
+    log_remote_path = f"/home/{aws_cfg.ssh_user}/pymdmix/{replica_name}/bootstrap.log"
+    click.echo(f"Streaming log from {ip}:{log_remote_path} (Ctrl-C to stop)\n")
+    try:
+        for line in tail_remote_log(ip, key_path, log_remote_path, ssh_user=aws_cfg.ssh_user):
+            click.echo(line, nl=False)
+    except KeyboardInterrupt:
+        click.echo("\nStopped watching.")
+
+
+# =============================================================================
 # REMOVE Command
 # =============================================================================
 
