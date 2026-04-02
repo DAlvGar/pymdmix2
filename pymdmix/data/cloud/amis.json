@@ -1,0 +1,88 @@
+{
+  "_comment": "pymdmix pre-baked AMIs with Ubuntu 22.04 + CUDA 12 + AmberTools 23. Keep sorted by region.",
+  "_build_instructions": "See docs/cloud/build-ami.md for how to build and publish these AMIs.",
+  "ambertools_version": "23",
+  "cuda_version": "12.0",
+  "base_os": "ubuntu-22.04",
+  "regions": {
+    "us-east-1": {
+      "ami_id": null,
+      "description": "N. Virginia — recommended for US East workloads"
+    },
+    "us-east-2": {
+      "ami_id": null,
+      "description": "Ohio"
+    },
+    "us-west-1": {
+      "ami_id": null,
+      "description": "N. California"
+    },
+    "us-west-2": {
+      "ami_id": null,
+      "description": "Oregon — recommended for US West workloads"
+    },
+    "eu-west-1": {
+      "ami_id": null,
+      "description": "Ireland — recommended for EU workloads"
+    },
+    "eu-central-1": {
+      "ami_id": null,
+      "description": "Frankfurt"
+    },
+    "ap-southeast-1": {
+      "ami_id": null,
+      "description": "Singapore"
+    },
+    "ap-northeast-1": {
+      "ami_id": null,
+      "description": "Tokyo"
+    }
+  },
+  "instance_types": {
+    "g4dn.xlarge": {
+      "gpus": 1,
+      "gpu_type": "NVIDIA T4 16GB",
+      "vcpus": 4,
+      "memory_gb": 16,
+      "on_demand_usd_hr": 0.526,
+      "spot_usd_hr_approx": 0.16,
+      "recommended_for": "Single replica, cost-effective"
+    },
+    "g4dn.2xlarge": {
+      "gpus": 1,
+      "gpu_type": "NVIDIA T4 16GB",
+      "vcpus": 8,
+      "memory_gb": 32,
+      "on_demand_usd_hr": 0.752,
+      "spot_usd_hr_approx": 0.23,
+      "recommended_for": "Single replica with large systems"
+    },
+    "g4dn.12xlarge": {
+      "gpus": 4,
+      "gpu_type": "NVIDIA T4 16GB",
+      "vcpus": 48,
+      "memory_gb": 192,
+      "on_demand_usd_hr": 3.912,
+      "spot_usd_hr_approx": 1.17,
+      "recommended_for": "Multiple replicas on one instance"
+    },
+    "g5.xlarge": {
+      "gpus": 1,
+      "gpu_type": "NVIDIA A10G 24GB",
+      "vcpus": 4,
+      "memory_gb": 16,
+      "on_demand_usd_hr": 1.006,
+      "spot_usd_hr_approx": 0.30,
+      "recommended_for": "Faster inference, larger systems"
+    },
+    "p3.2xlarge": {
+      "gpus": 1,
+      "gpu_type": "NVIDIA V100 16GB",
+      "vcpus": 8,
+      "memory_gb": 61,
+      "on_demand_usd_hr": 3.06,
+      "spot_usd_hr_approx": 0.92,
+      "recommended_for": "High-performance MD with large systems"
+    }
+  }
+}

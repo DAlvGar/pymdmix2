@@ -26,7 +26,10 @@ import logging
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from pymdmix.cloud.config import AWSConfig
 
 log = logging.getLogger(__name__)
 
@@ -166,6 +169,9 @@ class Config:
     protein_ff: str = "leaprc.protein.ff19SB"
     water_ff: str = "leaprc.water.opc"
 
+    # AWS cloud configuration (optional)
+    aws_config: AWSConfig | None = None
+
     def __post_init__(self):
         """Resolve paths and environment variables."""
         # Get AMBERHOME from environment if not set
@@ -181,6 +187,12 @@ class Config:
         # Convert md_settings from dict if needed
         if isinstance(self.md_settings, dict):
             self.md_settings = MDSettings.from_dict(self.md_settings)
+
+        # Convert aws_config from dict if needed
+        if isinstance(self.aws_config, dict):
+            from pymdmix.cloud.config import AWSConfig
+
+            self.aws_config = AWSConfig.from_dict(self.aws_config)
 
     @property
     def amber_bin(self) -> Path | None:
@@ -227,6 +239,9 @@ class Config:
         if self.amber_bin and not self.amber_bin.exists():
             errors.append(f"AMBER bin directory not found: {self.amber_bin}")
 
+        if self.aws_config is not None:
+            errors.extend(self.aws_config.validate())
+
         return errors
 
     def to_dict(self) -> dict[str, Any]:
@@ -243,6 +258,7 @@ class Config:
             "pmemd_exe": self.pmemd_exe,
             "protein_ff": self.protein_ff,
             "water_ff": self.water_ff,
+            "aws_config": self.aws_config.to_dict() if self.aws_config is not None else None,
         }
 
     @classmethod
@@ -252,13 +268,21 @@ class Config:
         md_data = data.pop("md_settings", {})
         md_settings = MDSettings.from_dict(md_data) if md_data else MDSettings()
 
+        # Handle nested AWSConfig
+        aws_data = data.pop("aws_config", None)
+        aws_config = None
+        if aws_data:
+            from pymdmix.cloud.config import AWSConfig
+
+            aws_config = AWSConfig.from_dict(aws_data)
+
         # Handle Path fields
         if "amber_home" in data and data["amber_home"]:
             data["amber_home"] = Path(data["amber_home"])
         if "work_dir" in data:
             data["work_dir"] = Path(data["work_dir"])
 
-        return cls(md_settings=md_settings, **data)
+        return cls(md_settings=md_settings, aws_config=aws_config, **data)
 
     def to_json(self, path: str | Path) -> None:
         """Save configuration to JSON file."""
