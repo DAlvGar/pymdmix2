@@ -293,6 +293,17 @@ class MDSettingsConfigFileParser:
         self.solv_nrepl: dict[str, int] = {}
         self._defaults_cache: dict[str, Any] | None = None
 
+    def _make_settings_manager(self, default_cfg: Path, user_cfg: Path) -> Any:
+        """Create a :class:`SettingsManager` instance for the given files."""
+        from pymdmix.utils.settings_parser import SettingsManager
+
+        return SettingsManager(
+            f_default=default_cfg,
+            f_user=user_cfg,
+            create_missing=False,
+            verbose=False,
+        )
+
     def _load_defaults(self) -> dict[str, Any]:
         """
         Load and cache defaults from ``data/defaults/md-settings.cfg``.
@@ -305,7 +316,6 @@ class MDSettingsConfigFileParser:
         if self._defaults_cache is not None:
             return self._defaults_cache
 
-        from pymdmix.utils.settings_parser import SettingsManager
         from pymdmix.utils.tools import defaults_root
 
         default_cfg = defaults_root("md-settings.cfg")
@@ -313,12 +323,7 @@ class MDSettingsConfigFileParser:
             self._defaults_cache = {}
             return self._defaults_cache
 
-        manager = SettingsManager(
-            f_default=default_cfg,
-            f_user=self.USER_MD_CFG,
-            create_missing=False,
-            verbose=False,
-        )
+        manager = self._make_settings_manager(default_cfg, self.USER_MD_CFG)
         manager.collect_settings()
         self._defaults_cache = manager.settings_to_dict()
         return self._defaults_cache
@@ -335,7 +340,6 @@ class MDSettingsConfigFileParser:
         to 1 if the file or key is unavailable), mirroring the old
         ``S.DEF_NREPLICAS`` access pattern.
         """
-        from pymdmix.utils.settings_parser import SettingsManager
         from pymdmix.utils.tools import defaults_root
 
         default_cfg = defaults_root("settings.cfg")
@@ -345,12 +349,7 @@ class MDSettingsConfigFileParser:
             return 1
 
         try:
-            manager = SettingsManager(
-                f_default=default_cfg,
-                f_user=user_cfg,
-                create_missing=False,
-                verbose=False,
-            )
+            manager = self._make_settings_manager(default_cfg, user_cfg)
             manager.collect_settings()
             return int(manager.settings_to_dict().get("DEF_NREPLICAS", 1))
         except Exception:
@@ -718,10 +717,11 @@ class MDSettingsConfigFileParser:
                 if mds_key not in MDSettings.__dataclass_fields__:
                     # Skip keys that don't map to MDSettings fields
                     continue
-                # Convert bool-like int fields
+                # Convert bool-like int fields using the dataclass field annotation
                 field_obj = MDSettings.__dataclass_fields__[mds_key]
+                field_type = field_obj.type
                 try:
-                    if field_obj.type in (bool, "bool"):
+                    if field_type is bool or (isinstance(field_type, type) and issubclass(field_type, bool)):
                         kwargs[mds_key] = bool(int(val)) if not isinstance(val, bool) else val
                     else:
                         kwargs[mds_key] = val

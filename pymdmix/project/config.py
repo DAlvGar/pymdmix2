@@ -21,6 +21,7 @@ Examples
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import os
@@ -362,7 +363,12 @@ class Config:
             if cfg_key in settings and settings[cfg_key] is not None:
                 val = settings[cfg_key]
                 if field_name == "protein_ff" and isinstance(val, list):
-                    val = val[0] if val else cls.__dataclass_fields__["protein_ff"].default
+                    # Use first FF from list; fall back to the dataclass default
+                    fld = next(
+                        (f for f in dataclasses.fields(cls) if f.name == "protein_ff"), None
+                    )
+                    default_ff = fld.default if fld is not None else "leaprc.protein.ff19SB"
+                    val = val[0] if val else default_ff
                 kwargs[field_name] = val
 
         return cls(**kwargs)
