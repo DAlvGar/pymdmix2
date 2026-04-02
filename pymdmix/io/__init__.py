@@ -44,6 +44,7 @@ from pymdmix.io.parsers import (
     ParserError,
     SystemConfigFileParser,
     SystemParserError,
+    parse_settings_config_file,
 )
 from pymdmix.io.plotting import (
     plot_convergence,
@@ -66,6 +67,7 @@ __all__ = [
     # Config parsers
     "SystemConfigFileParser",
     "MDSettingsConfigFileParser",
+    "parse_settings_config_file",
     "ParserError",
     "SystemParserError",
     "BadFile",

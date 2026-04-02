@@ -523,3 +523,228 @@ nanos = 20
             assert len(settings) == 3
         finally:
             os.unlink(path)
+
+
+# =============================================================================
+# Tests for new parse_to_mdsettings / parse_settings_config_file
+# =============================================================================
+
+
+class TestParseToMDSettings:
+    """Tests for MDSettingsConfigFileParser.parse_to_mdsettings and
+    the parse_settings_config_file convenience function."""
+
+    def test_parse_to_mdsettings_returns_mdsettings_objects(self):
+        """parse_to_mdsettings returns MDSettings instances."""
+        from pymdmix.io.parsers import MDSettingsConfigFileParser
+        from pymdmix.project.settings import MDSettings
+
+        cfg_content = """
+[MDSETTINGS]
+solvents = ETA
+nrepl = 1
+nanos = 10
+temp = 310.0
+restr = HA
+force = 0.5
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
+            f.write(cfg_content)
+            path = f.name
+
+        try:
+            parser = MDSettingsConfigFileParser()
+            settings = parser.parse_to_mdsettings(path)
+            assert len(settings) == 1
+            s = settings[0]
+            assert isinstance(s, MDSettings)
+            assert s.solvent == "ETA"
+            assert s.nanos == 10
+            assert s.temperature == 310.0
+            assert s.restraint_mode == "HA"
+        finally:
+            os.unlink(path)
+
+    def test_parse_to_mdsettings_legacy_field_names(self):
+        """parse_to_mdsettings maps legacy field names to MDSettings fields."""
+        from pymdmix.io.parsers import MDSettingsConfigFileParser
+
+        cfg_content = """
+[MDSETTINGS]
+solvents = ETA
+nrepl = 1
+nanos = 5
+temp = 300
+trajfrequency = 1000
+prod_steps = 250000
+npt_eq_steps = 100000
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
+            f.write(cfg_content)
+            path = f.name
+
+        try:
+            parser = MDSettingsConfigFileParser()
+            settings = parser.parse_to_mdsettings(path)
+            s = settings[0]
+            assert s.trajectory_frequency == 1000
+            assert s.production_steps == 250000
+            assert s.npt_equilibration_steps == 100000
+        finally:
+            os.unlink(path)
+
+    def test_parse_to_mdsettings_multiple_solvents(self):
+        """parse_to_mdsettings handles multiple solvents correctly."""
+        from pymdmix.io.parsers import MDSettingsConfigFileParser
+
+        cfg_content = """
+[MDSETTINGS]
+solvents = ETA, WAT
+nrepl = 1
+nanos = 2
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
+            f.write(cfg_content)
+            path = f.name
+
+        try:
+            parser = MDSettingsConfigFileParser()
+            settings = parser.parse_to_mdsettings(path)
+            assert len(settings) == 2
+            solvents = {s.solvent for s in settings}
+            assert solvents == {"ETA", "WAT"}
+        finally:
+            os.unlink(path)
+
+    def test_parse_settings_config_file_convenience(self):
+        """parse_settings_config_file returns MDSettings objects."""
+        from pymdmix.io.parsers import parse_settings_config_file
+        from pymdmix.project.settings import MDSettings
+
+        cfg_content = """
+[MDSETTINGS]
+solvents = MAM
+nrepl = 2
+nanos = 15
+temp = 298.0
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
+            f.write(cfg_content)
+            path = f.name
+
+        try:
+            settings = parse_settings_config_file(path)
+            assert len(settings) == 2
+            assert all(isinstance(s, MDSettings) for s in settings)
+            assert all(s.solvent == "MAM" for s in settings)
+            assert all(s.nanos == 15 for s in settings)
+        finally:
+            os.unlink(path)
+
+    def test_defaults_loaded_from_package(self):
+        """Default values come from package md-settings.cfg."""
+        from pymdmix.io.parsers import MDSettingsConfigFileParser
+
+        cfg_content = """
+[MDSETTINGS]
+solvents = ETA
+nrepl = 1
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
+            f.write(cfg_content)
+            path = f.name
+
+        try:
+            parser = MDSettingsConfigFileParser()
+            settings = parser.parse_to_mdsettings(path)
+            assert len(settings) == 1
+            s = settings[0]
+            # Defaults from md-settings.cfg
+            assert s.nanos == 20            # int-nanos = 20
+            assert s.temperature == 300.0  # float-temp = 300.0
+            assert s.trajectory_frequency == 500  # int-trajfrequency = 500
+        finally:
+            os.unlink(path)
+
+    def test_default_nreplicas_from_settings_cfg(self):
+        """Default replica count is loaded from settings.cfg (DEF_NREPLICAS = 1)."""
+        from pymdmix.io.parsers import MDSettingsConfigFileParser
+
+        cfg_content = """
+[MDSETTINGS]
+solvents = ETA, WAT
+nanos = 5
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as f:
+            f.write(cfg_content)
+            path = f.name
+
+        try:
+            parser = MDSettingsConfigFileParser()
+            # DEF_NREPLICAS = 1 in settings.cfg → 2 solvents × 1 replica = 2
+            settings = parser.parse_to_mdsettings(path)
+            assert len(settings) == 2
+        finally:
+            os.unlink(path)
+
+
+# =============================================================================
+# Tests for Config.from_defaults
+# =============================================================================
+
+
+class TestConfigFromDefaults:
+    """Tests for Config.from_defaults."""
+
+    def test_from_defaults_returns_config(self):
+        """Config.from_defaults() returns a Config instance."""
+        from pymdmix.project.config import Config
+
+        config = Config.from_defaults()
+        assert isinstance(config, Config)
+
+    def test_from_defaults_executables(self):
+        """Config.from_defaults() sets executables from settings.cfg."""
+        from pymdmix.project.config import Config
+
+        config = Config.from_defaults()
+        assert config.tleap_exe == "tleap"
+        assert config.cpptraj_exe == "cpptraj"
+        assert config.pmemd_exe == "pmemd.cuda"
+
+    def test_get_default_config_does_not_raise(self):
+        """get_default_config() works without errors."""
+        from pymdmix.project.config import get_default_config
+
+        config = get_default_config()
+        assert config is not None
+
+
+# =============================================================================
+# Tests for defaults_root helper
+# =============================================================================
+
+
+class TestDefaultsRoot:
+    """Tests for the defaults_root utility."""
+
+    def test_defaults_root_exists(self):
+        """defaults_root() points to an existing directory."""
+        from pymdmix.utils.tools import defaults_root
+
+        path = defaults_root()
+        assert path.is_dir()
+
+    def test_defaults_root_settings_cfg_exists(self):
+        """data/defaults/settings.cfg is present in the package."""
+        from pymdmix.utils.tools import defaults_root
+
+        cfg = defaults_root("settings.cfg")
+        assert cfg.is_file()
+
+    def test_defaults_root_md_settings_cfg_exists(self):
+        """data/defaults/md-settings.cfg is present in the package."""
+        from pymdmix.utils.tools import defaults_root
+
+        cfg = defaults_root("md-settings.cfg")
+        assert cfg.is_file()

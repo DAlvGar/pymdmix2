@@ -33,6 +33,8 @@ from pymdmix.utils.tools import (
     clip_str,
     data_root,
     dataRoot,
+    defaults_root,
+    defaultsRoot,
     file_permissions,
     filePermission,
     num_list_to_mask,
@@ -66,6 +68,7 @@ __all__ = [
     # Path utilities
     "project_root",
     "data_root",
+    "defaults_root",
     "test_root",
     "templates_root",
     "solvents_root",
@@ -104,6 +107,7 @@ __all__ = [
     # Legacy aliases (camelCase)
     "projectRoot",
     "dataRoot",
+    "defaultsRoot",
     "testRoot",
     "templatesRoot",
     "solventsRoot",
