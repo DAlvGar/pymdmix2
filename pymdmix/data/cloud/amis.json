@@ -1,6 +1,7 @@
 {
   "_comment": "pymdmix pre-baked AMIs with Ubuntu 22.04 + CUDA 12 + AmberTools 23. Keep sorted by region.",
   "_build_instructions": "See docs/cloud/build-ami.md for how to build and publish these AMIs.",
+  "_status": "All ami_id values are currently null — these are placeholders pending AMI publication. Set AWSConfig.ami_id to a custom AMI in your project config, or the bootstrap script will fall back to Ubuntu 22.04 LTS and install AmberTools on first boot (~10 min overhead).",
   "ambertools_version": "23",
   "cuda_version": "12.0",
   "base_os": "ubuntu-22.04",

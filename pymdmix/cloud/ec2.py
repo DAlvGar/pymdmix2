@@ -316,8 +316,11 @@ class EC2Manager:
         s3_uri = aws_config.s3_uri(replica.name)
         work_dir = f"/home/{aws_config.ssh_user}/pymdmix/{replica.name}"
         terminate_cmd = (
-            'aws ec2 terminate-instances --region "$AWS_REGION" '
-            '--instance-ids "$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"'
+            'INSTANCE_ID=$(TOKEN=$(curl -s -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" '
+            'http://169.254.169.254/latest/api/token) && '
+            'curl -s -H "X-aws-ec2-metadata-token: $TOKEN" '
+            'http://169.254.169.254/latest/meta-data/instance-id) && '
+            'aws ec2 terminate-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"'
         )
         maybe_terminate = terminate_cmd if aws_config.terminate_on_completion else "echo 'skipping self-termination'"
         log_file = f"{work_dir}/bootstrap.log"

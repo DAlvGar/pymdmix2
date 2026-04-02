@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # =============================================================================
 # AWSConfig tests
@@ -25,7 +23,7 @@ class TestAWSConfig:
         assert cfg.terminate_on_completion is True
         assert cfg.s3_prefix == "pymdmix/"
 
-    def test_prefix_trailing_slash_normalised(self):
+    def test_prefix_trailing_slash_normalized(self):
         from pymdmix.cloud.config import AWSConfig
 
         cfg = AWSConfig(s3_prefix="myprefix")

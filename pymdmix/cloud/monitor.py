@@ -96,7 +96,8 @@ class RunJob:
             else:
                 end = datetime.now(timezone.utc)
             return (end - start).total_seconds()
-        except Exception:
+        except ValueError as exc:
+            log.debug("Could not parse timestamps for elapsed time: %s", exc)
             return None
 
 

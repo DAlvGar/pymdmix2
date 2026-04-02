@@ -1655,9 +1655,9 @@ def run() -> None:
     pass
 
 
-def _get_aws_config_or_exit(proj):  # type: ignore[return]
+def _get_aws_config_or_exit(project):  # type: ignore[return]
     """Load AWS config from project or exit with an error."""
-    aws_cfg = proj.config.aws_config
+    aws_cfg = project.config.aws_config
     if aws_cfg is None:
         click.secho("✗ No AWS configuration found. Run: pymdmix cloud configure", fg="red")
         sys.exit(1)

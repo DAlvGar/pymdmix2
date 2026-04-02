@@ -228,7 +228,8 @@ class S3Transfer:
         try:
             response = self._s3.get_object(Bucket=self.config.s3_bucket, Key=key)
             return response["Body"].read().decode(errors="replace")
-        except Exception:
+        except Exception as exc:
+            log.debug("Bootstrap log not yet available for replica '%s': %s", replica.name, exc)
             return None
 
     # ------------------------------------------------------------------
