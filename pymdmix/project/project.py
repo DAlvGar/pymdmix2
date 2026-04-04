@@ -78,6 +78,11 @@ class Project:
             self.path = Path(self.path)
 
     @property
+    def systems_path(self) -> Path:
+        """Path to solvated systems directory."""
+        return self.path / "systems"
+
+    @property
     def replicas_path(self) -> Path:
         """Path to replicas directory."""
         return self.path / "replicas"
@@ -286,6 +291,7 @@ class Project:
         self.replicas_path.mkdir(exist_ok=True)
         self.input_path.mkdir(exist_ok=True)
         self.analysis_path.mkdir(exist_ok=True)
+        self.systems_path.mkdir(exist_ok=True)
 
         log.info(f"Created project directories: {self.path}")
 

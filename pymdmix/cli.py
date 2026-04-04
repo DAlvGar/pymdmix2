@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import configparser
+import shutil
 import sys
 from pathlib import Path
 from typing import Literal, cast
@@ -21,6 +22,11 @@ from typing import Literal, cast
 import click
 
 from pymdmix import __version__
+
+# File extensions recognised as valid structure inputs for solvation
+_AMBER_OFF_EXTENSIONS: frozenset[str] = frozenset({".off", ".lib"})
+_PDB_EXTENSIONS: frozenset[str] = frozenset({".pdb", ".ent"})
+_SOLVATABLE_EXTENSIONS: frozenset[str] = _AMBER_OFF_EXTENSIONS | _PDB_EXTENSIONS
 
 
 def _groups_file(project_path: Path) -> Path:
@@ -193,7 +199,7 @@ def create_project(
             click.echo(f"  System: {system_cfg.name} ({system_cfg.input_file})")
 
         # Add replicas
-        from pymdmix.project.replica import create_replica
+        from pymdmix.project.replica import ReplicaState, create_replica
 
         for md_settings in proj_cfg.settings:
             solvent = md_settings.solvent
@@ -208,11 +214,105 @@ def create_project(
             )
             project.replicas.append(replica)
 
+        # ---- Solvate and write MD inputs ------------------------------------
+        # The system config input can be either a PDB file or an Amber Object
+        # File (OFF/lib).  The primary/recommended workflow (matching the
+        # original pyMDMix) uses an OFF file that already contains the protein
+        # force-field parameters; PDB is the alternative.
+        input_path = system_cfg.input_file
+        is_solvatable = (
+            input_path.suffix.lower() in _SOLVATABLE_EXTENSIONS
+            and input_path.exists()
+        )
+        has_tleap = bool(shutil.which("tleap") or shutil.which("tLeap"))
+
+        if not is_solvatable:
+            click.secho(
+                "  \u26a0 System input is not a PDB or OFF file \u2014 skipping solvation. "
+                "Set topology/coordinates manually.",
+                fg="yellow",
+            )
+        elif not has_tleap:
+            click.secho(
+                "  \u26a0 tleap not found \u2014 skipping solvation and input writing. "
+                "Install AmberTools and re-run, or solvate manually.",
+                fg="yellow",
+            )
+        else:
+            from pymdmix.core.solvent import SolventLibrary
+            from pymdmix.setup.solvate import SolvateResult, SolvationOptions, solvate_structure
+
+            library = SolventLibrary()
+            solvation_results: dict[str, SolvateResult] = {}
+
+            for solvent_name in sorted({r.solvent for r in project.replicas}):
+                solvent_obj = library.get(solvent_name)
+                if solvent_obj is None:
+                    click.secho(f"  \u26a0 Unknown solvent: {solvent_name}", fg="yellow")
+                    continue
+
+                output_dir = project.systems_path / solvent_name
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_prefix = f"{system_cfg.name}_{solvent_name}"
+
+                if verbose:
+                    click.echo(f"  Solvating with {solvent_name}...")
+
+                result = solvate_structure(
+                    input_path,
+                    solvent_obj,
+                    output_dir=output_dir,
+                    output_prefix=output_prefix,
+                    unit_name=system_cfg.unit_name,
+                    options=SolvationOptions(
+                        extra_forcefields=list(system_cfg.extra_forcefields or []),
+                    ),
+                )
+
+                if result.success:
+                    solvation_results[solvent_name] = result
+                    click.echo(f"  Solvated {solvent_name}: {result.topology.name}")
+                else:
+                    click.secho(
+                        f"  \u2717 Solvation failed for {solvent_name}: {result.error}",
+                        fg="red",
+                    )
+
+            # Copy solvated topology/coordinates to each replica and write inputs
+            n_ready = 0
+            for replica in project.replicas:
+                sol_result = solvation_results.get(replica.solvent)
+                if not sol_result:
+                    continue
+
+                top_name = f"{system_cfg.name}_{replica.solvent}.prmtop"
+                crd_name = f"{system_cfg.name}_{replica.solvent}.inpcrd"
+                shutil.copy2(sol_result.topology, replica.path / top_name)
+                shutil.copy2(sol_result.coordinates, replica.path / crd_name)
+                replica.topology = top_name
+                replica.coordinates = crd_name
+                replica.state = ReplicaState.SETUP
+
+                try:
+                    replica.create_md_input()
+                    replica.state = ReplicaState.READY
+                    n_ready += 1
+                except Exception as exc:
+                    click.secho(
+                        f"  \u26a0 Could not write inputs for {replica.name}: {exc}",
+                        fg="yellow",
+                    )
+
+                replica.save()
+
+            if n_ready:
+                click.echo(f"  Ready:    {n_ready}/{len(project.replicas)} replicas")
+
         project.save()
 
         n_replicas = len(proj_cfg.settings)
         solvents = list({s.solvent for s in proj_cfg.settings})
-        click.secho(f"✓ Project '{name}' created", fg="green")
+        click.secho(f"\u2713 Project '{name}' created", fg="green")
         click.echo(f"  System:   {system_cfg.name}")
         click.echo(f"  Solvents: {', '.join(solvents)}")
         click.echo(f"  Replicas: {n_replicas}")
@@ -272,8 +372,6 @@ def create_template(ctx: click.Context, output_path: str) -> None:
         pymdmix create template
         pymdmix create template -o /path/to/my_project.cfg
     """
-    import shutil
-
     from pymdmix.utils.tools import templates_root
 
     src = templates_root("project.cfg")

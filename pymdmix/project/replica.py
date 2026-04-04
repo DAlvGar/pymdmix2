@@ -177,6 +177,47 @@ class MDSettings:
         """Total expected snapshots."""
         return self.n_traj_files * (self.prod_steps // self.traj_frequency)
 
+    @classmethod
+    def from_settings(cls, settings: Any) -> "MDSettings":
+        """
+        Create an MDSettings from any compatible settings object.
+
+        Handles renamed fields between different settings classes
+        (e.g. ``project.settings.MDSettings`` which uses ``production_steps``
+        and ``trajectory_frequency`` instead of ``prod_steps`` /
+        ``traj_frequency``).
+
+        Parameters
+        ----------
+        settings : Any
+            A settings-like object with compatible attributes.
+
+        Returns
+        -------
+        MDSettings
+            New instance with values copied from *settings*.
+        """
+        return cls(
+            nanos=getattr(settings, "nanos", 20),
+            temperature=getattr(settings, "temperature", 300.0),
+            timestep=getattr(settings, "timestep", 2.0),
+            prod_steps=getattr(
+                settings,
+                "prod_steps",
+                getattr(settings, "production_steps", 500000),
+            ),
+            traj_frequency=getattr(
+                settings,
+                "traj_frequency",
+                getattr(settings, "trajectory_frequency", 1000),
+            ),
+            restraint_mode=getattr(settings, "restraint_mode", "FREE"),
+            restraint_force=getattr(settings, "restraint_force", 0.0),
+            restraint_mask=getattr(settings, "restraint_mask", ""),
+            align_mask=getattr(settings, "align_mask", ""),
+            md_program=getattr(settings, "md_program", "AMBER"),
+        )
+
 
 @dataclass
 class Replica:
@@ -262,6 +303,10 @@ class Replica:
             self.settings = MDSettings()
         elif isinstance(self.settings, dict):
             self.settings = MDSettings(**self.settings)
+        elif not isinstance(self.settings, MDSettings):
+            # Convert other settings objects (e.g. pymdmix.project.settings.MDSettings)
+            # to the local MDSettings, handling renamed fields.
+            self.settings = MDSettings.from_settings(self.settings)
 
     # =========================================================================
     # Path Properties
