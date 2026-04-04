@@ -23,6 +23,11 @@ import click
 
 from pymdmix import __version__
 
+# File extensions recognised as valid structure inputs for solvation
+_AMBER_OFF_EXTENSIONS: frozenset[str] = frozenset({".off", ".lib"})
+_PDB_EXTENSIONS: frozenset[str] = frozenset({".pdb", ".ent"})
+_SOLVATABLE_EXTENSIONS: frozenset[str] = _AMBER_OFF_EXTENSIONS | _PDB_EXTENSIONS
+
 
 def _groups_file(project_path: Path) -> Path:
     """Get path to CLI groups file for a project."""
@@ -215,10 +220,8 @@ def create_project(
         # original pyMDMix) uses an OFF file that already contains the protein
         # force-field parameters; PDB is the alternative.
         input_path = system_cfg.input_file
-        _off_exts = {".off", ".lib"}
-        _pdb_exts = {".pdb", ".ent"}
         is_solvatable = (
-            input_path.suffix.lower() in (_off_exts | _pdb_exts)
+            input_path.suffix.lower() in _SOLVATABLE_EXTENSIONS
             and input_path.exists()
         )
         has_tleap = bool(shutil.which("tleap") or shutil.which("tLeap"))

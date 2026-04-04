@@ -296,6 +296,13 @@ class TestSolvateResult:
 class TestLeapScriptFixed:
     """Tests covering fixes to generate_leap_script to match original pyMDMix."""
 
+    @staticmethod
+    def _dummy_off(path, stem="prot"):
+        """Create a minimal placeholder OFF file and return its Path."""
+        off = path / f"{stem}.off"
+        off.write_text(f"!entry.{stem}.unit.name single str\n \"{stem}\"\n")
+        return off
+
     def test_solvent_box_uses_box_unit_not_nameBox(self, tmp_output_dir):
         """The tleap solvation command uses solvent.box_unit, not '{name}BOX'.
 
@@ -329,8 +336,7 @@ class TestLeapScriptFixed:
         The original workflow's primary input was an Amber Object File
         (pre-parameterised protein unit), not a PDB.
         """
-        off = tmp_output_dir / "prot.off"
-        off.write_text("!entry.prot.unit.name single str\n \"prot\"\n")
+        off = self._dummy_off(tmp_output_dir)
 
         solvent = Solvent(name="ETA", box_unit="ETAWAT20")
         script = generate_leap_script(
@@ -349,8 +355,7 @@ class TestLeapScriptFixed:
 
     def test_off_input_uses_stem_as_unit_when_unit_name_not_given(self, tmp_output_dir):
         """When unit_name is None, the file stem is used as the unit name."""
-        off = tmp_output_dir / "myprotein.off"
-        off.write_text("!entry.myprotein.unit.name single str\n \"myprotein\"\n")
+        off = self._dummy_off(tmp_output_dir, stem="myprotein")
 
         solvent = Solvent(name="ETA", box_unit="ETAWAT20")
         script = generate_leap_script(
