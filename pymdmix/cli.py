@@ -17,7 +17,7 @@ import configparser
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Literal, cast
 
 import click
 
