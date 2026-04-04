@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import configparser
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -209,17 +210,22 @@ def create_project(
             project.replicas.append(replica)
 
         # ---- Solvate and write MD inputs ------------------------------------
-        # When the system config references a PDB, solvate it with each solvent
-        # using LEaP, then write Amber input files and COMMANDS.sh per replica.
-        import shutil
-
-        pdb_path = system_cfg.input_file
-        is_pdb = pdb_path.suffix.lower() in (".pdb", ".ent") and pdb_path.exists()
+        # The system config input can be either a PDB file or an Amber Object
+        # File (OFF/lib).  The primary/recommended workflow (matching the
+        # original pyMDMix) uses an OFF file that already contains the protein
+        # force-field parameters; PDB is the alternative.
+        input_path = system_cfg.input_file
+        _off_exts = {".off", ".lib"}
+        _pdb_exts = {".pdb", ".ent"}
+        is_solvatable = (
+            input_path.suffix.lower() in (_off_exts | _pdb_exts)
+            and input_path.exists()
+        )
         has_tleap = bool(shutil.which("tleap") or shutil.which("tLeap"))
 
-        if not is_pdb:
+        if not is_solvatable:
             click.secho(
-                "  \u26a0 System input is not a PDB \u2014 skipping solvation. "
+                "  \u26a0 System input is not a PDB or OFF file \u2014 skipping solvation. "
                 "Set topology/coordinates manually.",
                 fg="yellow",
             )
@@ -250,10 +256,11 @@ def create_project(
                     click.echo(f"  Solvating with {solvent_name}...")
 
                 result = solvate_structure(
-                    pdb_path,
+                    input_path,
                     solvent_obj,
                     output_dir=output_dir,
                     output_prefix=output_prefix,
+                    unit_name=system_cfg.unit_name,
                     options=SolvationOptions(
                         extra_forcefields=list(system_cfg.extra_forcefields or []),
                     ),
@@ -362,8 +369,6 @@ def create_template(ctx: click.Context, output_path: str) -> None:
         pymdmix create template
         pymdmix create template -o /path/to/my_project.cfg
     """
-    import shutil
-
     from pymdmix.utils.tools import templates_root
 
     src = templates_root("project.cfg")

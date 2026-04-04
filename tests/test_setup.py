@@ -161,7 +161,7 @@ class TestLeapScript:
         )
 
         script = generate_leap_script(
-            pdb_path=pdb_path,
+            input_path=pdb_path,
             solvent=solvent,
             output_prefix="system",
         )
@@ -179,7 +179,7 @@ class TestLeapScript:
         solvent = Solvent(name="WAT")
 
         script = generate_leap_script(
-            pdb_path=pdb_path,
+            input_path=pdb_path,
             solvent=solvent,
             output_prefix="system",
             force_fields=["leaprc.protein.ff14SB", "leaprc.water.tip3p"],
@@ -286,3 +286,126 @@ class TestSolvateResult:
         result = SolvateResult(success=False)
         with pytest.raises(ValueError, match="No topology"):
             result.save_topology("/tmp/nowhere.prmtop")
+
+
+# =============================================================================
+# Solvate - fixed behaviours matching the original pyMDMix workflow
+# =============================================================================
+
+
+class TestLeapScriptFixed:
+    """Tests covering fixes to generate_leap_script to match original pyMDMix."""
+
+    def test_solvent_box_uses_box_unit_not_nameBox(self, tmp_output_dir):
+        """The tleap solvation command uses solvent.box_unit, not '{name}BOX'.
+
+        The original code solvated with the unit name from the OFF file
+        (e.g. 'ETAWAT20'), not a made-up 'ETABOX' name.
+        """
+        pdb = tmp_output_dir / "prot.pdb"
+        pdb.write_text("END\n")
+
+        solvent = Solvent(name="ETA", box_unit="ETAWAT20")
+        script = generate_leap_script(input_path=pdb, solvent=solvent, output_prefix="out")
+
+        # Must contain the actual box unit name
+        assert "ETAWAT20" in script
+        # Must NOT contain the wrong made-up name
+        assert "ETABOX" not in script
+
+    def test_solvent_box_fallback_when_box_unit_empty(self, tmp_output_dir):
+        """Falls back to '{name}BOX' when box_unit is not set."""
+        pdb = tmp_output_dir / "prot.pdb"
+        pdb.write_text("END\n")
+
+        solvent = Solvent(name="ETA", box_unit="")
+        script = generate_leap_script(input_path=pdb, solvent=solvent, output_prefix="out")
+
+        assert "ETABOX" in script
+
+    def test_off_input_uses_loadoff_not_loadpdb(self, tmp_output_dir):
+        """When input is an OFF file, script uses loadoff + copy, not loadpdb.
+
+        The original workflow's primary input was an Amber Object File
+        (pre-parameterised protein unit), not a PDB.
+        """
+        off = tmp_output_dir / "prot.off"
+        off.write_text("!entry.prot.unit.name single str\n \"prot\"\n")
+
+        solvent = Solvent(name="ETA", box_unit="ETAWAT20")
+        script = generate_leap_script(
+            input_path=off,
+            solvent=solvent,
+            output_prefix="out",
+            unit_name="prot",
+        )
+
+        assert "loadoff" in script
+        assert f"loadoff {off}" in script
+        assert "sys = copy prot" in script
+        # Must NOT use loadpdb for the protein
+        # (it may use loadoff for the solvent, but loadpdb must not appear)
+        assert "loadpdb" not in script
+
+    def test_off_input_uses_stem_as_unit_when_unit_name_not_given(self, tmp_output_dir):
+        """When unit_name is None, the file stem is used as the unit name."""
+        off = tmp_output_dir / "myprotein.off"
+        off.write_text("!entry.myprotein.unit.name single str\n \"myprotein\"\n")
+
+        solvent = Solvent(name="ETA", box_unit="ETAWAT20")
+        script = generate_leap_script(
+            input_path=off,
+            solvent=solvent,
+            output_prefix="out",
+        )
+
+        assert "sys = copy myprotein" in script
+
+    def test_pdb_input_still_uses_loadpdb(self, tmp_output_dir):
+        """PDB input still generates the loadpdb command (unchanged behaviour)."""
+        pdb = tmp_output_dir / "prot.pdb"
+        pdb.write_text("END\n")
+
+        solvent = Solvent(name="ETA", box_unit="ETAWAT20")
+        script = generate_leap_script(input_path=pdb, solvent=solvent, output_prefix="out")
+
+        assert f"sys = loadpdb {pdb}" in script
+
+    def test_extra_forcefields_threaded_into_leap_script(self, tmp_output_dir):
+        """extra_forcefields from SolvationOptions reach the leap script."""
+        from pymdmix.setup.solvate import SolvateResult, SolvationOptions, solvate_structure
+        import unittest.mock as mock
+
+        pdb = tmp_output_dir / "prot.pdb"
+        pdb.write_text("END\n")
+
+        solvent = Solvent(name="ETA", box_unit="ETAWAT20")
+
+        # Capture the script passed to run_leap
+        captured = {}
+
+        def fake_run_leap(script, leap_exe, work_dir):
+            captured["script"] = script
+            return False, "mocked"  # Simulate failure so we just inspect script
+
+        with mock.patch("pymdmix.setup.solvate.run_leap", side_effect=fake_run_leap):
+            solvate_structure(
+                pdb,
+                solvent,
+                output_dir=tmp_output_dir / "out",
+                output_prefix="out",
+                options=SolvationOptions(extra_forcefields=["leaprc.gaff2"]),
+            )
+
+        assert "leaprc.gaff2" in captured.get("script", "")
+
+    def test_default_forcefields_use_ff14sb_and_gaff(self, tmp_output_dir):
+        """Default force fields match original pyMDMix defaults (ff14SB + gaff)."""
+        pdb = tmp_output_dir / "prot.pdb"
+        pdb.write_text("END\n")
+
+        solvent = Solvent(name="ETA", box_unit="ETAWAT20")
+        script = generate_leap_script(input_path=pdb, solvent=solvent, output_prefix="out")
+
+        assert "ff14SB" in script
+        assert "gaff" in script

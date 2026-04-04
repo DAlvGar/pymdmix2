@@ -203,15 +203,22 @@ class TestErrorHandling:
 
 
 class TestCreateProjectWithConfig:
-    """Test `create project -f project.cfg` when tleap is not available."""
+    """Test `create project -f project.cfg` for both PDB and OFF inputs."""
 
-    def _write_project_cfg(self, path: Path, pdb_path: Path) -> Path:
-        """Write a minimal project config referencing a real PDB file."""
+    def _write_project_cfg(self, path: Path, input_path: Path, unit_name: str | None = None) -> Path:
+        """Write a minimal project config referencing an input file."""
         cfg = path / "project.cfg"
+        suffix = input_path.suffix.lower()
+        if suffix in (".off", ".lib"):
+            input_key = "OFF"
+        else:
+            input_key = "PDB"
+        uname_line = f"UNAME = {unit_name}\n" if unit_name else ""
         cfg.write_text(
             f"[SYSTEM]\n"
             f"NAME = prot\n"
-            f"PDB = {pdb_path}\n"
+            f"{input_key} = {input_path}\n"
+            f"{uname_line}"
             f"\n"
             f"[MDSETTINGS]\n"
             f"SOLVENT = ETA\n"
@@ -228,6 +235,12 @@ class TestCreateProjectWithConfig:
         )
         return pdb
 
+    def _write_dummy_off(self, path: Path) -> Path:
+        """Write a minimal placeholder OFF file."""
+        off = path / "prot.off"
+        off.write_text("!entry.prot.unit.name single str\n \"prot\"\n")
+        return off
+
     def test_create_project_cfg_no_tleap(self, runner, temp_dir):
         """create project with a .cfg file warns when tleap is absent."""
         import unittest.mock as mock
@@ -237,7 +250,7 @@ class TestCreateProjectWithConfig:
             cfg = self._write_project_cfg(Path("."), pdb)
 
             # Pretend tleap is not on PATH
-            with mock.patch("shutil.which", return_value=None):
+            with mock.patch("pymdmix.cli.shutil.which", return_value=None):
                 result = runner.invoke(
                     cli,
                     ["create", "project", "-n", "myproj", "-f", str(cfg)],
@@ -257,10 +270,28 @@ class TestCreateProjectWithConfig:
             # Systems directory must exist (created even without solvation)
             assert (Path("myproj") / "systems").exists()
 
+    def test_create_project_cfg_off_input_no_tleap(self, runner, temp_dir):
+        """create project with an OFF input file warns when tleap is absent."""
+        import unittest.mock as mock
+
+        with runner.isolated_filesystem(temp_dir=temp_dir):
+            off = self._write_dummy_off(Path("."))
+            cfg = self._write_project_cfg(Path("."), off, unit_name="prot")
+
+            with mock.patch("pymdmix.cli.shutil.which", return_value=None):
+                result = runner.invoke(
+                    cli,
+                    ["create", "project", "-n", "myproj", "-f", str(cfg)],
+                )
+
+            assert result.exit_code == 0, result.output
+            # Replicas must still be created
+            assert any((Path("myproj") / "replicas").iterdir())
+
     def test_create_project_cfg_replica_has_input_files_when_tleap_available(
         self, runner, temp_dir
     ):
-        """When tleap succeeds, replicas get topology, input files, and COMMANDS.sh."""
+        """When tleap succeeds (PDB input), replicas get topology, input files, and COMMANDS.sh."""
         import unittest.mock as mock
         from pymdmix.setup.solvate import SolvateResult
 
@@ -281,7 +312,7 @@ class TestCreateProjectWithConfig:
             )
 
             with (
-                mock.patch("shutil.which", return_value="/usr/bin/tleap"),
+                mock.patch("pymdmix.cli.shutil.which", return_value="/usr/bin/tleap"),
                 mock.patch(
                     "pymdmix.setup.solvate.solvate_structure",
                     return_value=fake_result,
@@ -301,3 +332,42 @@ class TestCreateProjectWithConfig:
                     assert (rep_dir / "min" / "min.in").exists(), f"min.in missing in {rep_dir}"
                     assert (rep_dir / "eq" / "eq1.in").exists(), f"eq1.in missing in {rep_dir}"
                     assert (rep_dir / "md" / "prod.in").exists(), f"prod.in missing in {rep_dir}"
+
+    def test_create_project_cfg_off_input_replica_files(self, runner, temp_dir):
+        """When tleap succeeds with OFF input, replicas get input files and COMMANDS.sh."""
+        import unittest.mock as mock
+        from pymdmix.setup.solvate import SolvateResult
+
+        with runner.isolated_filesystem(temp_dir=temp_dir):
+            off = self._write_dummy_off(Path("."))
+            cfg = self._write_project_cfg(Path("."), off, unit_name="prot")
+
+            fake_top = Path("fake.prmtop")
+            fake_crd = Path("fake.inpcrd")
+            fake_top.write_text("FAKE_PRMTOP")
+            fake_crd.write_text("FAKE_INPCRD")
+
+            fake_result = SolvateResult(
+                topology=fake_top.resolve(),
+                coordinates=fake_crd.resolve(),
+                success=True,
+            )
+
+            with (
+                mock.patch("pymdmix.cli.shutil.which", return_value="/usr/bin/tleap"),
+                mock.patch(
+                    "pymdmix.setup.solvate.solvate_structure",
+                    return_value=fake_result,
+                ),
+            ):
+                result = runner.invoke(
+                    cli,
+                    ["create", "project", "-n", "myproj", "-f", str(cfg)],
+                )
+
+            assert result.exit_code == 0, result.output
+
+            for rep_dir in (Path("myproj") / "replicas").iterdir():
+                if rep_dir.is_dir():
+                    assert (rep_dir / "COMMANDS.sh").exists(), f"COMMANDS.sh missing in {rep_dir}"
+                    assert (rep_dir / "min" / "min.in").exists(), f"min.in missing in {rep_dir}"
