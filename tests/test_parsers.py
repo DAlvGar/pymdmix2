@@ -748,3 +748,87 @@ class TestDefaultsRoot:
 
         cfg = defaults_root("md-settings.cfg")
         assert cfg.is_file()
+
+
+# =============================================================================
+# Tests for parse_system_config helper (key mapping fix)
+# =============================================================================
+
+
+class TestParseSystemConfig:
+    """
+    Tests for the parse_system_config() function, which must correctly map
+    from the internal dict keys returned by SystemConfigFileParser.parse()
+    to the SystemConfig dataclass fields.
+    """
+
+    def test_unit_name_from_uname_key(self, tmp_path):
+        """UNAME from [SYSTEM] is mapped to SystemConfig.unit_name."""
+        from pymdmix.io.parsers import parse_system_config
+
+        off = tmp_path / "prot.off"
+        off.write_text("dummy")
+        cfg = tmp_path / "system.cfg"
+        cfg.write_text(
+            f"[SYSTEM]\nNAME = prot\nOFF = {off}\nUNAME = myunit\n"
+        )
+
+        sc = parse_system_config(cfg)
+        assert sc.unit_name == "myunit", (
+            f"UNAME not propagated: expected 'myunit', got {sc.unit_name!r}"
+        )
+
+    def test_extra_residues_from_extrares_key(self, tmp_path):
+        """EXTRARES from [SYSTEM] is mapped to SystemConfig.extra_residues."""
+        from pymdmix.io.parsers import parse_system_config
+
+        off = tmp_path / "prot.off"
+        off.write_text("dummy")
+        cfg = tmp_path / "system.cfg"
+        cfg.write_text(
+            f"[SYSTEM]\nNAME = prot\nOFF = {off}\nEXTRARES = LIG, MOD\n"
+        )
+
+        sc = parse_system_config(cfg)
+        assert sc.extra_residues == ["LIG", "MOD"], (
+            f"EXTRARES not propagated: got {sc.extra_residues!r}"
+        )
+
+    def test_extra_forcefields_from_extraff_key(self, tmp_path):
+        """EXTRAFF from [SYSTEM] is mapped to SystemConfig.extra_forcefields."""
+        from pymdmix.io.parsers import parse_system_config
+
+        off = tmp_path / "prot.off"
+        off.write_text("dummy")
+        cfg = tmp_path / "system.cfg"
+        cfg.write_text(
+            f"[SYSTEM]\nNAME = prot\nOFF = {off}\nEXTRAFF = frcmod.gaff2, leaprc.gaff\n"
+        )
+
+        sc = parse_system_config(cfg)
+        assert sc.extra_forcefields == ["frcmod.gaff2", "leaprc.gaff"], (
+            f"EXTRAFF not propagated: got {sc.extra_forcefields!r}"
+        )
+
+    def test_all_keys_in_full_system_section(self, tmp_path):
+        """All optional [SYSTEM] keys survive the SystemConfigFileParser → SystemConfig pipeline."""
+        from pymdmix.io.parsers import parse_system_config
+
+        off = tmp_path / "prot.off"
+        off.write_text("dummy")
+        cfg = tmp_path / "system.cfg"
+        cfg.write_text(
+            f"[SYSTEM]\n"
+            f"NAME = myprot\n"
+            f"OFF = {off}\n"
+            f"UNAME = myprot\n"
+            f"EXTRARES = LIG\n"
+            f"EXTRAFF = frcmod.lig\n"
+        )
+
+        sc = parse_system_config(cfg)
+        assert sc.name == "myprot"
+        assert sc.unit_name == "myprot"
+        assert sc.extra_residues == ["LIG"]
+        assert sc.extra_forcefields == ["frcmod.lig"]
+        assert sc.input_file.suffix == ".off"

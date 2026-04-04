@@ -924,9 +924,9 @@ def parse_system_config(config_file: str | Path) -> SystemConfig:
     return SystemConfig(
         name=params["name"],
         input_file=Path(input_path),
-        unit_name=params.get("uname"),
-        extra_residues=params.get("extrares"),
-        extra_forcefields=params.get("extraff"),
+        unit_name=params.get("unit_name"),
+        extra_residues=params.get("extra_residues"),
+        extra_forcefields=params.get("extra_ff"),
     )
 
 
