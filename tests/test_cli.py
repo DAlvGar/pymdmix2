@@ -297,15 +297,7 @@ class TestCreateProjectWithConfig:
             # Each replica should have COMMANDS.sh and input files
             for rep_dir in (Path("myproj") / "replicas").iterdir():
                 if rep_dir.is_dir():
-                    assert (rep_dir / "COMMANDS.sh").exists(), (
-                        f"COMMANDS.sh missing in {rep_dir}"
-                    )
-                    assert (rep_dir / "min" / "min.in").exists(), (
-                        f"min.in missing in {rep_dir}"
-                    )
-                    assert (rep_dir / "eq" / "eq1.in").exists(), (
-                        f"eq1.in missing in {rep_dir}"
-                    )
-                    assert (rep_dir / "md" / "prod.in").exists(), (
-                        f"prod.in missing in {rep_dir}"
-                    )
+                    assert (rep_dir / "COMMANDS.sh").exists(), f"COMMANDS.sh missing in {rep_dir}"
+                    assert (rep_dir / "min" / "min.in").exists(), f"min.in missing in {rep_dir}"
+                    assert (rep_dir / "eq" / "eq1.in").exists(), f"eq1.in missing in {rep_dir}"
+                    assert (rep_dir / "md" / "prod.in").exists(), f"prod.in missing in {rep_dir}"

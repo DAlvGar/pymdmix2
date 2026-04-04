@@ -211,11 +211,11 @@ def create_project(
         # ---- Solvate and write MD inputs ------------------------------------
         # When the system config references a PDB, solvate it with each solvent
         # using LEaP, then write Amber input files and COMMANDS.sh per replica.
-        import shutil as _shutil
+        import shutil
 
         pdb_path = system_cfg.input_file
         is_pdb = pdb_path.suffix.lower() in (".pdb", ".ent") and pdb_path.exists()
-        has_tleap = bool(_shutil.which("tleap") or _shutil.which("tLeap"))
+        has_tleap = bool(shutil.which("tleap") or shutil.which("tLeap"))
 
         if not is_pdb:
             click.secho(
@@ -231,10 +231,10 @@ def create_project(
             )
         else:
             from pymdmix.core.solvent import SolventLibrary
-            from pymdmix.setup.solvate import SolvationOptions, solvate_structure
+            from pymdmix.setup.solvate import SolvateResult, SolvationOptions, solvate_structure
 
             library = SolventLibrary()
-            solvation_results: dict[str, Any] = {}
+            solvation_results: dict[str, SolvateResult] = {}
 
             for solvent_name in sorted({r.solvent for r in project.replicas}):
                 solvent_obj = library.get(solvent_name)
@@ -277,8 +277,8 @@ def create_project(
 
                 top_name = f"{system_cfg.name}_{replica.solvent}.prmtop"
                 crd_name = f"{system_cfg.name}_{replica.solvent}.inpcrd"
-                _shutil.copy2(sol_result.topology, replica.path / top_name)
-                _shutil.copy2(sol_result.coordinates, replica.path / crd_name)
+                shutil.copy2(sol_result.topology, replica.path / top_name)
+                shutil.copy2(sol_result.coordinates, replica.path / crd_name)
                 replica.topology = top_name
                 replica.coordinates = crd_name
                 replica.state = ReplicaState.SETUP
