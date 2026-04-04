@@ -195,3 +195,117 @@ class TestErrorHandling:
         """Test error for unknown command."""
         result = runner.invoke(cli, ["foobar"])
         assert result.exit_code != 0
+
+
+# =============================================================================
+# Full Project Config Tests (create project -f project.cfg)
+# =============================================================================
+
+
+class TestCreateProjectWithConfig:
+    """Test `create project -f project.cfg` when tleap is not available."""
+
+    def _write_project_cfg(self, path: Path, pdb_path: Path) -> Path:
+        """Write a minimal project config referencing a real PDB file."""
+        cfg = path / "project.cfg"
+        cfg.write_text(
+            f"[SYSTEM]\n"
+            f"NAME = prot\n"
+            f"PDB = {pdb_path}\n"
+            f"\n"
+            f"[MDSETTINGS]\n"
+            f"SOLVENT = ETA\n"
+            f"NREPL = 1\n"
+        )
+        return cfg
+
+    def _write_dummy_pdb(self, path: Path) -> Path:
+        """Write a minimal PDB file."""
+        pdb = path / "prot.pdb"
+        pdb.write_text(
+            "ATOM      1  CA  ALA A   1       1.000   1.000   1.000  1.00  0.00           C  \n"
+            "END\n"
+        )
+        return pdb
+
+    def test_create_project_cfg_no_tleap(self, runner, temp_dir):
+        """create project with a .cfg file warns when tleap is absent."""
+        import unittest.mock as mock
+
+        with runner.isolated_filesystem(temp_dir=temp_dir):
+            pdb = self._write_dummy_pdb(Path("."))
+            cfg = self._write_project_cfg(Path("."), pdb)
+
+            # Pretend tleap is not on PATH
+            with mock.patch("shutil.which", return_value=None):
+                result = runner.invoke(
+                    cli,
+                    ["create", "project", "-n", "myproj", "-f", str(cfg)],
+                )
+
+            assert result.exit_code == 0, result.output
+            assert "myproj" in result.output or "prot" in result.output
+
+            # Project directory must exist
+            assert Path("myproj").exists()
+
+            # Replica directories must exist
+            replicas_dir = Path("myproj") / "replicas"
+            assert replicas_dir.exists()
+            assert any(replicas_dir.iterdir())
+
+            # Systems directory must exist (created even without solvation)
+            assert (Path("myproj") / "systems").exists()
+
+    def test_create_project_cfg_replica_has_input_files_when_tleap_available(
+        self, runner, temp_dir
+    ):
+        """When tleap succeeds, replicas get topology, input files, and COMMANDS.sh."""
+        import unittest.mock as mock
+        from pymdmix.setup.solvate import SolvateResult
+
+        with runner.isolated_filesystem(temp_dir=temp_dir):
+            pdb = self._write_dummy_pdb(Path("."))
+            cfg = self._write_project_cfg(Path("."), pdb)
+
+            # Mock tleap as available and solvation as successful
+            fake_top = Path("fake.prmtop")
+            fake_crd = Path("fake.inpcrd")
+            fake_top.write_text("FAKE_PRMTOP")
+            fake_crd.write_text("FAKE_INPCRD")
+
+            fake_result = SolvateResult(
+                topology=fake_top.resolve(),
+                coordinates=fake_crd.resolve(),
+                success=True,
+            )
+
+            with (
+                mock.patch("shutil.which", return_value="/usr/bin/tleap"),
+                mock.patch(
+                    "pymdmix.setup.solvate.solvate_structure",
+                    return_value=fake_result,
+                ),
+            ):
+                result = runner.invoke(
+                    cli,
+                    ["create", "project", "-n", "myproj", "-f", str(cfg)],
+                )
+
+            assert result.exit_code == 0, result.output
+
+            # Each replica should have COMMANDS.sh and input files
+            for rep_dir in (Path("myproj") / "replicas").iterdir():
+                if rep_dir.is_dir():
+                    assert (rep_dir / "COMMANDS.sh").exists(), (
+                        f"COMMANDS.sh missing in {rep_dir}"
+                    )
+                    assert (rep_dir / "min" / "min.in").exists(), (
+                        f"min.in missing in {rep_dir}"
+                    )
+                    assert (rep_dir / "eq" / "eq1.in").exists(), (
+                        f"eq1.in missing in {rep_dir}"
+                    )
+                    assert (rep_dir / "md" / "prod.in").exists(), (
+                        f"prod.in missing in {rep_dir}"
+                    )

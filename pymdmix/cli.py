@@ -16,7 +16,7 @@ from __future__ import annotations
 import configparser
 import sys
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import click
 
@@ -193,7 +193,7 @@ def create_project(
             click.echo(f"  System: {system_cfg.name} ({system_cfg.input_file})")
 
         # Add replicas
-        from pymdmix.project.replica import create_replica
+        from pymdmix.project.replica import ReplicaState, create_replica
 
         for md_settings in proj_cfg.settings:
             solvent = md_settings.solvent
@@ -208,11 +208,101 @@ def create_project(
             )
             project.replicas.append(replica)
 
+        # ---- Solvate and write MD inputs ------------------------------------
+        # When the system config references a PDB, solvate it with each solvent
+        # using LEaP, then write Amber input files and COMMANDS.sh per replica.
+        import shutil as _shutil
+
+        pdb_path = system_cfg.input_file
+        is_pdb = pdb_path.suffix.lower() in (".pdb", ".ent") and pdb_path.exists()
+        has_tleap = bool(_shutil.which("tleap") or _shutil.which("tLeap"))
+
+        if not is_pdb:
+            click.secho(
+                "  \u26a0 System input is not a PDB \u2014 skipping solvation. "
+                "Set topology/coordinates manually.",
+                fg="yellow",
+            )
+        elif not has_tleap:
+            click.secho(
+                "  \u26a0 tleap not found \u2014 skipping solvation and input writing. "
+                "Install AmberTools and re-run, or solvate manually.",
+                fg="yellow",
+            )
+        else:
+            from pymdmix.core.solvent import SolventLibrary
+            from pymdmix.setup.solvate import SolvationOptions, solvate_structure
+
+            library = SolventLibrary()
+            solvation_results: dict[str, Any] = {}
+
+            for solvent_name in sorted({r.solvent for r in project.replicas}):
+                solvent_obj = library.get(solvent_name)
+                if solvent_obj is None:
+                    click.secho(f"  \u26a0 Unknown solvent: {solvent_name}", fg="yellow")
+                    continue
+
+                output_dir = project.systems_path / solvent_name
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_prefix = f"{system_cfg.name}_{solvent_name}"
+
+                if verbose:
+                    click.echo(f"  Solvating with {solvent_name}...")
+
+                result = solvate_structure(
+                    pdb_path,
+                    solvent_obj,
+                    output_dir=output_dir,
+                    output_prefix=output_prefix,
+                    options=SolvationOptions(
+                        extra_forcefields=list(system_cfg.extra_forcefields or []),
+                    ),
+                )
+
+                if result.success:
+                    solvation_results[solvent_name] = result
+                    click.echo(f"  Solvated {solvent_name}: {result.topology.name}")
+                else:
+                    click.secho(
+                        f"  \u2717 Solvation failed for {solvent_name}: {result.error}",
+                        fg="red",
+                    )
+
+            # Copy solvated topology/coordinates to each replica and write inputs
+            n_ready = 0
+            for replica in project.replicas:
+                sol_result = solvation_results.get(replica.solvent)
+                if not sol_result:
+                    continue
+
+                top_name = f"{system_cfg.name}_{replica.solvent}.prmtop"
+                crd_name = f"{system_cfg.name}_{replica.solvent}.inpcrd"
+                _shutil.copy2(sol_result.topology, replica.path / top_name)
+                _shutil.copy2(sol_result.coordinates, replica.path / crd_name)
+                replica.topology = top_name
+                replica.coordinates = crd_name
+                replica.state = ReplicaState.SETUP
+
+                try:
+                    replica.create_md_input()
+                    replica.state = ReplicaState.READY
+                    n_ready += 1
+                except Exception as exc:
+                    click.secho(
+                        f"  \u26a0 Could not write inputs for {replica.name}: {exc}",
+                        fg="yellow",
+                    )
+
+                replica.save()
+
+            if n_ready:
+                click.echo(f"  Ready:    {n_ready}/{len(project.replicas)} replicas")
+
         project.save()
 
         n_replicas = len(proj_cfg.settings)
         solvents = list({s.solvent for s in proj_cfg.settings})
-        click.secho(f"✓ Project '{name}' created", fg="green")
+        click.secho(f"\u2713 Project '{name}' created", fg="green")
         click.echo(f"  System:   {system_cfg.name}")
         click.echo(f"  Solvents: {', '.join(solvents)}")
         click.echo(f"  Replicas: {n_replicas}")

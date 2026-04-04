@@ -262,6 +262,29 @@ class Replica:
             self.settings = MDSettings()
         elif isinstance(self.settings, dict):
             self.settings = MDSettings(**self.settings)
+        elif not isinstance(self.settings, MDSettings):
+            # Convert other settings objects (e.g. pymdmix.project.settings.MDSettings)
+            # to the local MDSettings, handling renamed fields.
+            self.settings = MDSettings(
+                nanos=getattr(self.settings, "nanos", 20),
+                temperature=getattr(self.settings, "temperature", 300.0),
+                timestep=getattr(self.settings, "timestep", 2.0),
+                prod_steps=getattr(
+                    self.settings,
+                    "prod_steps",
+                    getattr(self.settings, "production_steps", 500000),
+                ),
+                traj_frequency=getattr(
+                    self.settings,
+                    "traj_frequency",
+                    getattr(self.settings, "trajectory_frequency", 1000),
+                ),
+                restraint_mode=getattr(self.settings, "restraint_mode", "FREE"),
+                restraint_force=getattr(self.settings, "restraint_force", 0.0),
+                restraint_mask=getattr(self.settings, "restraint_mask", ""),
+                align_mask=getattr(self.settings, "align_mask", ""),
+                md_program=getattr(self.settings, "md_program", "AMBER"),
+            )
 
     # =========================================================================
     # Path Properties
