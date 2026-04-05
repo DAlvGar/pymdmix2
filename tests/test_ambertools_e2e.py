@@ -531,31 +531,25 @@ class TestProjectCreationWorkflow:
       correct restraint settings for heavy-atom (HA) mode
     * COMMANDS.sh submission script
     * Replicas serialised as ``replica.json`` with state ``READY``
+    * Solvated PDB contains more atoms than the dry input system
+
+    The project is created once per class via the ``_project_dir`` fixture so
+    tleap only runs once even though multiple test methods inspect the output.
     """
 
-    def test_create_project_eta_2replicas_100ns_ha_restraints(self, tmp_path):
+    @pytest.fixture(scope="class")
+    def _project_dir(self, tmp_path_factory):
         """
-        Create a full pymdmix project from a config file and validate output.
-
-        Configuration:
-        - Input system : pep.off (bundled test peptide, pre-parameterised)
-        - Solvent      : ETA (20% ethanol)
-        - Replicas     : 2
-        - Length       : 100 ns
-        - Restraints   : HA (soft restraints on all non-hydrogen atoms,
-                         10 kcal/mol·Å²)
-
-        Assertions cover the complete folder tree, solvated topologies,
-        all Amber input files, restraint parameters, and replica state.
+        Create the full pymdmix project once and share it across all tests
+        in this class.  tleap is only invoked once per pytest session.
         """
-        import json
         import textwrap
 
         from click.testing import CliRunner
 
         from pymdmix.cli import cli as pymdmix_cli
 
-        # ---- 1. Write project config ----------------------------------------
+        tmp_path = tmp_path_factory.mktemp("project_creation")
         config_content = textwrap.dedent(f"""\
             [SYSTEM]
             NAME = pep
@@ -575,7 +569,6 @@ class TestProjectCreationWorkflow:
 
         project_dir = tmp_path / "myproject"
 
-        # ---- 2. Run CLI -------------------------------------------------------
         runner = CliRunner()
         result = runner.invoke(
             pymdmix_cli,
@@ -587,22 +580,67 @@ class TestProjectCreationWorkflow:
             ],
         )
 
-        # Surface any exception for a clear failure message
+        # Surface any exception immediately so the fixture fails clearly
         if result.exception:
             import traceback
 
-            tb = "".join(traceback.format_exception(type(result.exception), result.exception, result.exception.__traceback__))
+            tb = "".join(
+                traceback.format_exception(
+                    type(result.exception),
+                    result.exception,
+                    result.exception.__traceback__,
+                )
+            )
             pytest.fail(
                 f"CLI raised an exception (exit code {result.exit_code}):\n{tb}\n"
                 f"--- stdout ---\n{result.output}"
             )
 
-        assert result.exit_code == 0, (
-            f"pymdmix create project exited with code {result.exit_code}.\n"
-            f"--- output ---\n{result.output}"
+        if result.exit_code != 0:
+            pytest.fail(
+                f"pymdmix create project exited with code {result.exit_code}.\n"
+                f"--- output ---\n{result.output}"
+            )
+
+        return project_dir
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _count_pdb_atoms(pdb_path: Path) -> int:
+        """Return the number of ATOM / HETATM records in *pdb_path*."""
+        return sum(
+            1
+            for line in pdb_path.read_text().splitlines()
+            if line.startswith(("ATOM  ", "HETATM"))
         )
 
-        # ---- 3. Project directory structure ----------------------------------
+    # ------------------------------------------------------------------
+    # Test methods
+    # ------------------------------------------------------------------
+
+    def test_create_project_eta_2replicas_100ns_ha_restraints(self, _project_dir):
+        """
+        Validate the complete output of ``pymdmix create project``.
+
+        Configuration:
+        - Input system : pep.off (bundled test peptide, pre-parameterised)
+        - Solvent      : ETA (20% ethanol)
+        - Replicas     : 2
+        - Length       : 100 ns
+        - Restraints   : HA (soft restraints on all non-hydrogen atoms,
+                         10 kcal/mol·Å²)
+
+        Assertions cover the complete folder tree, solvated topologies,
+        all Amber input files, restraint parameters, and replica state.
+        """
+        import json
+
+        project_dir = _project_dir
+
+        # ---- 1. Project directory structure ----------------------------------
         assert (project_dir / "project.json").exists(), (
             "project.json not created"
         )
@@ -614,7 +652,7 @@ class TestProjectCreationWorkflow:
             "Input config not copied to project/input/"
         )
 
-        # ---- 4. Solvated system files ----------------------------------------
+        # ---- 2. Solvated system files ----------------------------------------
         eta_systems_dir = project_dir / "systems" / "ETA"
         prmtop = eta_systems_dir / "pep_ETA.prmtop"
         inpcrd = eta_systems_dir / "pep_ETA.inpcrd"
@@ -625,7 +663,7 @@ class TestProjectCreationWorkflow:
             f"Solvated coordinates missing or empty: {inpcrd}"
         )
 
-        # ---- 5. Two replica directories, each fully populated ----------------
+        # ---- 3. Two replica directories, each fully populated ----------------
         for i in (1, 2):
             rep_dir = project_dir / "replicas" / f"pep_ETA_{i}"
             assert rep_dir.is_dir(), f"Replica directory missing: {rep_dir}"
@@ -651,7 +689,7 @@ class TestProjectCreationWorkflow:
                     f"Replica {i}: {label} ({rel}) missing or empty"
                 )
 
-            # ---- 6. Restraint parameters in input files ----------------------
+            # ---- 4. Restraint parameters in input files ----------------------
             # Minimization: HA restraints enabled (ntr=1) with correct mask
             min_in = (rep_dir / "min" / "min.in").read_text()
             assert "ntr=1," in min_in.replace(" ", ""), (
@@ -679,7 +717,7 @@ class TestProjectCreationWorkflow:
                 f"Replica {i}: prod.in should have ntr=0 (no restraints in production)"
             )
 
-            # ---- 7. Replica metadata: state READY, 100 ns -------------------
+            # ---- 5. Replica metadata: state READY, 100 ns -------------------
             replica_data = json.loads((rep_dir / "replica.json").read_text())
             assert replica_data.get("state") == "READY", (
                 f"Replica {i}: expected state READY, got {replica_data.get('state')}"
@@ -692,3 +730,26 @@ class TestProjectCreationWorkflow:
             assert settings_data.get("restraint_mode", "").upper() == "HA", (
                 f"Replica {i}: expected restraint_mode=HA, got {settings_data.get('restraint_mode')}"
             )
+
+    def test_solvated_pdb_has_more_atoms_than_dry_system(self, _project_dir):
+        """
+        Solvated PDB produced by tleap contains more atoms than the dry input.
+
+        tleap embeds all atoms (protein + solvent + counter-ions) into
+        ``systems/ETA/pep_ETA.pdb``.  The dry reference is ``pep.pdb`` which
+        holds only the 122 peptide atoms.  After solvation the file must
+        contain strictly more ATOM / HETATM records.
+        """
+        solvated_pdb = _project_dir / "systems" / "ETA" / "pep_ETA.pdb"
+        assert solvated_pdb.exists(), (
+            f"Solvated PDB not found: {solvated_pdb}"
+        )
+
+        dry_atoms = self._count_pdb_atoms(_PEP_PDB)
+        solvated_atoms = self._count_pdb_atoms(solvated_pdb)
+
+        assert solvated_atoms > dry_atoms, (
+            f"Solvated PDB should have more atoms than the dry system "
+            f"({solvated_atoms} <= {dry_atoms}).  "
+            f"Solvation may have failed or the PDB was not written correctly."
+        )
