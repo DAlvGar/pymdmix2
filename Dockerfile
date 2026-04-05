@@ -37,10 +37,12 @@ RUN conda install -y -c conda-forge \
 # when running in non-interactive shells (Docker entrypoint, CI runners, etc.).
 ENV AMBERHOME=/opt/conda
 
-# Copy project source and install pymdmix with all optional extras
+# Copy project source and install pymdmix with all optional extras.
+# Also install pytest so the image can be used as a self-contained test runner
+# (e.g. `docker run --entrypoint pytest pymdmix:latest -m ambertools`).
 WORKDIR /opt/pymdmix
 COPY . .
-RUN pip install --no-cache-dir ".[full]"
+RUN pip install --no-cache-dir ".[full]" pytest
 
 # User working directory — mount project data here
 WORKDIR /work
