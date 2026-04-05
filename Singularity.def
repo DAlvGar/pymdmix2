@@ -1,0 +1,61 @@
+# Singularity / Apptainer definition file for pyMDmix2
+#
+# Build from local source (preferred — installs the checked-out version):
+#   singularity build --fakeroot pymdmix.sif Singularity.def
+#   apptainer build --fakeroot pymdmix.sif Singularity.def
+#
+# Build from a pre-built Docker image (requires Docker daemon):
+#   singularity build pymdmix.sif docker-daemon://pymdmix:latest
+#
+# Run:
+#   singularity run pymdmix.sif --help
+#   apptainer run pymdmix.sif --help
+
+Bootstrap: docker
+From: continuumio/miniconda3:24.1.2-0
+
+%labels
+    org.opencontainers.image.title pyMDmix2
+    org.opencontainers.image.description Molecular Dynamics with organic solvent mixtures for drug discovery
+    org.opencontainers.image.authors Daniel Alvarez-Garcia <algarcia.daniel@gmail.com>
+    org.opencontainers.image.source https://github.com/DAlvGar/pymdmix2
+    org.opencontainers.image.licenses MIT
+
+%files
+    # Copy the entire source tree into the container.
+    # The build must be run from the repository root.
+    . /opt/pymdmix
+
+%post
+    # System dependencies
+    apt-get update && \
+        apt-get install -y --no-install-recommends build-essential git && \
+        rm -rf /var/lib/apt/lists/*
+
+    # AmberTools + Python 3.11 via conda-forge
+    conda install -y -c conda-forge python=3.11 ambertools && \
+        conda clean -afy
+
+    # Install pymdmix with all optional extras from the copied source
+    pip install --no-cache-dir "/opt/pymdmix[full]"
+
+%environment
+    export PATH="/opt/conda/bin:$PATH"
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
+
+%runscript
+    exec pymdmix "$@"
+
+%help
+    pyMDmix2 — Molecular Dynamics with organic solvent mixtures for drug discovery.
+
+    Basic usage:
+      singularity run pymdmix.sif --help
+      singularity run pymdmix.sif create --help
+
+    Mount a working directory:
+      singularity run --bind $(pwd):/work --pwd /work pymdmix.sif [COMMAND] [OPTIONS]
+
+    AmberTools binaries (cpptraj, LEaP, sander, …) are available inside the
+    container and will be found automatically by pymdmix.

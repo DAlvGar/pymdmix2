@@ -1,0 +1,81 @@
+name: E2E AmberTools Tests
+
+# Runs the pytest suite that requires real AmberTools binaries (tleap, cpptraj).
+# Tests execute inside the project's Docker image so the CI environment
+# exactly mirrors the container users are expected to run.
+#
+# Triggers:
+#   - Push / merge to main
+#   - Manual dispatch (Actions → "Run workflow")
+#   - Weekly schedule (keeps the image cache warm and catches upstream regressions)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # 06:00 UTC every Monday
+
+jobs:
+  e2e-ambertools:
+    name: E2E tests (AmberTools inside Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90 # conda build + tests can take a while on a cold cache
+    permissions:
+      contents: read
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2. Set up Docker Buildx (required for cache export)
+      # -----------------------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # -----------------------------------------------------------------------
+      # 3. Build the Docker image (with GitHub Actions layer cache)
+      #    First build: ~30–50 min (conda install ambertools is large)
+      #    Cached builds: ~3–5 min
+      # -----------------------------------------------------------------------
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: pymdmix:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # -----------------------------------------------------------------------
+      # 4. Run the ambertools-marked pytest suite inside the container.
+      #    The image's WORKDIR is /work; we mount the repo so test source
+      #    changes are picked up without a rebuild.
+      # -----------------------------------------------------------------------
+      - name: Run ambertools e2e tests
+        run: |
+          docker run --rm \
+            --name pymdmix_e2e \
+            -v "${{ github.workspace }}/tests:/opt/pymdmix/tests" \
+            --entrypoint pytest \
+            pymdmix:ci \
+            -m "ambertools" \
+            --tb=short \
+            -v \
+            /opt/pymdmix/tests/test_ambertools_e2e.py
+
+      # -----------------------------------------------------------------------
+      # 5. (Optional) Upload test reports as an artifact for debugging
+      # -----------------------------------------------------------------------
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-ambertools-logs
+          path: |
+            /tmp/pytest-*
+          retention-days: 7
