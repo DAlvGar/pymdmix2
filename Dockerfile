@@ -26,12 +26,16 @@ RUN apt-get update && \
         git && \
     rm -rf /var/lib/apt/lists/*
 
-# Install AmberTools and Python 3.11 in the base conda env.
+# AmberTools + Python 3.11 via conda-forge.
 # ambertools on conda-forge includes cpptraj, LEaP, sander, antechamber, etc.
 RUN conda install -y -c conda-forge \
         python=3.11 \
         ambertools && \
     conda clean -afy
+
+# Expose AMBERHOME so pymdmix can locate tleap, cpptraj, and force-field data
+# when running in non-interactive shells (Docker entrypoint, CI runners, etc.).
+ENV AMBERHOME=/opt/conda
 
 # Copy project source and install pymdmix with all optional extras
 WORKDIR /opt/pymdmix
