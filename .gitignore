@@ -7,6 +7,8 @@ build/
 *.egg
 .pytest_cache/
 *.dx
+# Allow DX files in tests/data/ (tracked via Git LFS)
+!tests/data/**/*.dx
 projects/
 .env
 *.log

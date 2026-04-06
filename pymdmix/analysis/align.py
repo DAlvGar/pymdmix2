@@ -154,13 +154,11 @@ def _align_mdanalysis(
         select=selection,
         filename=str(output),
     )
-    run_kwargs: dict = {}
-    if start is not None:
-        run_kwargs["start"] = start
-    if stop is not None:
-        run_kwargs["stop"] = stop
-    if step != 1:
-        run_kwargs["step"] = step
+    run_kwargs: dict = {
+        k: v
+        for k, v in {"start": start, "stop": stop, "step": step if step != 1 else None}.items()
+        if v is not None
+    }
     aligner.run(**run_kwargs)
 
     # MDAnalysis >= 2.0 returns a 1-D RMSD array; older versions return
