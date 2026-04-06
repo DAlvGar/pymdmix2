@@ -362,12 +362,13 @@ def run_leap(
         #
         # Real failure patterns:
         #   • "Fatal Error!" — hard abort
+        #   • "FATAL" / "FATAL:" — hard abort variants reported by LEaP
         #   • "Exiting LEaP: Errors = N" where N > 0
-        if "Fatal Error!" in log_output:
+        import re
+
+        if "Fatal Error!" in log_output or re.search(r"\bFATAL\b", log_output, re.IGNORECASE):
             success = False
         else:
-            import re
-
             m = re.search(r"Exiting LEaP: Errors = (\d+)", log_output)
             if m and int(m.group(1)) > 0:
                 success = False
