@@ -63,6 +63,10 @@ include = ["pymdmix*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+markers = [
+    "ambertools: marks tests that require AmberTools (tleap, LEaP) to be installed",
+    "cpptraj: marks tests that require the cpptraj binary from AmberTools",
+]
 
 [tool.ruff]
 line-length = 100

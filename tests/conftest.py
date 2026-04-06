@@ -2,12 +2,72 @@
 Shared pytest fixtures for pyMDMix tests.
 """
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# Custom marker auto-skip hooks
+# ---------------------------------------------------------------------------
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "ambertools: marks tests that require AmberTools (tleap, LEaP) to be installed",
+    )
+    config.addinivalue_line(
+        "markers",
+        "cpptraj: marks tests that require the cpptraj binary from AmberTools",
+    )
+
+
+def _tleap_available() -> bool:
+    """Return True if tleap can be found via AMBERHOME or PATH."""
+    amber_home = os.environ.get("AMBERHOME")
+    if amber_home:
+        for sub in ("bin", "exe"):
+            candidate = Path(amber_home) / sub / "tleap"
+            if candidate.exists():
+                return True
+    return shutil.which("tleap") is not None
+
+
+def _cpptraj_available() -> bool:
+    """Return True if cpptraj can be found via AMBER_PTRAJ or PATH."""
+    return bool(os.environ.get("AMBER_PTRAJ")) or shutil.which("cpptraj") is not None
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip ambertools/cpptraj tests when the required tools are absent."""
+    amber_ok = _tleap_available()
+    cpptraj_ok = _cpptraj_available()
+
+    skip_amber = pytest.mark.skip(
+        reason=(
+            "AmberTools not available. "
+            "Set AMBERHOME or run inside Docker: ./scripts/run_ambertools_tests.sh"
+        )
+    )
+    skip_cpptraj = pytest.mark.skip(
+        reason=(
+            "cpptraj not available. "
+            "Set AMBER_PTRAJ or add cpptraj to PATH; run inside Docker: "
+            "./scripts/run_ambertools_tests.sh"
+        )
+    )
+
+    for item in items:
+        if "ambertools" in item.keywords and not amber_ok:
+            item.add_marker(skip_amber)
+        if "cpptraj" in item.keywords and not cpptraj_ok:
+            item.add_marker(skip_cpptraj)
+
 
 
 @pytest.fixture
