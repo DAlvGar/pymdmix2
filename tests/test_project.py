@@ -67,8 +67,9 @@ class TestConfig:
 
         assert config.amber_home == tmp_output_dir
 
-    def test_config_validation(self):
+    def test_config_validation(self, monkeypatch):
         """Test config validation."""
+        monkeypatch.delenv("AMBERHOME", raising=False)
         config = Config(amber_home=None)
         errors = config.validate()
 

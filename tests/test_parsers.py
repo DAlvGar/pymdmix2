@@ -705,11 +705,16 @@ class TestConfigFromDefaults:
 
     def test_from_defaults_executables(self):
         """Config.from_defaults() sets executables from settings.cfg."""
+        from pathlib import Path
+
         from pymdmix.project.config import Config
 
         config = Config.from_defaults()
-        assert config.tleap_exe == "tleap"
-        assert config.cpptraj_exe == "cpptraj"
+        # valid_binary() may resolve the bare name to its full path when the
+        # binary is installed; accept either the plain name or a path whose
+        # filename matches the expected binary.
+        assert Path(str(config.tleap_exe)).name == "tleap"
+        assert Path(str(config.cpptraj_exe)).name == "cpptraj"
         assert config.pmemd_exe == "pmemd.cuda"
 
     def test_get_default_config_does_not_raise(self):
