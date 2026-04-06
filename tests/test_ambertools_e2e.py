@@ -36,12 +36,12 @@ from pathlib import Path
 import pytest
 
 # ---------------------------------------------------------------------------
-# Bundled test data paths (accessed via importlib.resources)
+# Test data paths (tests/data/)
 # ---------------------------------------------------------------------------
 
-_DATA_DIR = Path(str(files("pymdmix").joinpath("data")))
-_PEP_DIR = _DATA_DIR / "test" / "pep"
-_SOLVENTS_DIR = _DATA_DIR / "solvents"
+_TEST_DATA_DIR = Path(__file__).parent / "data"
+_PEP_DIR = _TEST_DATA_DIR / "pep"
+_SOLVENTS_DIR = Path(str(files("pymdmix").joinpath("data/solvents")))
 
 _PEP_PDB = _PEP_DIR / "pep.pdb"
 _PEP_OFF = _PEP_DIR / "pep.off"

@@ -1,0 +1,12 @@
+# Git LFS tracking for binary/large test data files in tests/data/
+# These patterns are scoped to tests/data/ to avoid disrupting existing
+# package data files (e.g., pymdmix/data/solvents/*.off) that are already
+# tracked as regular git objects.
+
+tests/data/**/*.nc filter=lfs diff=lfs merge=lfs -text
+tests/data/**/*.dx filter=lfs diff=lfs merge=lfs -text
+tests/data/**/*.xplor filter=lfs diff=lfs merge=lfs -text
+tests/data/**/*.prmtop filter=lfs diff=lfs merge=lfs -text
+tests/data/**/*.prmcrd filter=lfs diff=lfs merge=lfs -text
+tests/data/**/*.off filter=lfs diff=lfs merge=lfs -text
+tests/data/**/*.pdb filter=lfs diff=lfs merge=lfs -text

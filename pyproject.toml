@@ -57,7 +57,7 @@ where = ["."]
 include = ["pymdmix*"]
 
 [tool.setuptools.package-data]
-"pymdmix.data" = ["**/*"]
+"pymdmix.data" = ["solvents/*", "defaults/*", "templates/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -65,6 +65,7 @@ python_files = "test_*.py"
 markers = [
     "ambertools: marks tests that require AmberTools (tleap, LEaP) to be installed",
     "cpptraj: marks tests that require the cpptraj binary from AmberTools",
+    "real_data: marks tests that require large test data files (traj.nc, DX grids, etc.) in tests/data/",
 ]
 
 [tool.ruff]

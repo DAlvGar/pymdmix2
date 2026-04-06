@@ -9,7 +9,6 @@ that the modules interact correctly together.
 
 from __future__ import annotations
 
-from importlib.resources import files
 from pathlib import Path
 
 import numpy as np
@@ -38,8 +37,8 @@ from pymdmix.setup.prepare import PrepareResult, prepare_structure
 # Minimum number of solvents expected in the bundled library (ETA, WAT, MAM, ...)
 _MIN_STANDARD_SOLVENTS = 3
 
-# Path to the bundled test PDB file (located via importlib.resources)
-_PEP_PDB_PATH = Path(str(files("pymdmix").joinpath("data/test/pep/pep.pdb")))
+# Path to the test peptide PDB file (tests/data/pep/pep.pdb)
+_PEP_PDB_PATH = Path(__file__).parent / "data" / "pep" / "pep.pdb"
 
 
 # ---------------------------------------------------------------------------

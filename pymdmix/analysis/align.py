@@ -143,7 +143,9 @@ def _align_mdanalysis(
         ref = u.copy()
         ref.trajectory[0]  # First frame as reference
 
-    # Perform alignment
+    # Perform alignment — pass frame-range parameters to .run(), not to
+    # AlignTraj.__init__(), so that frame selection is respected in all
+    # versions of MDAnalysis.
     log.info(f"Aligning {len(u.trajectory)} frames using MDAnalysis...")
 
     aligner = align.AlignTraj(
@@ -151,14 +153,20 @@ def _align_mdanalysis(
         ref,
         select=selection,
         filename=str(output),
-        start=start,
-        stop=stop,
-        step=step,
     )
-    aligner.run()
+    run_kwargs: dict = {}
+    if start is not None:
+        run_kwargs["start"] = start
+    if stop is not None:
+        run_kwargs["stop"] = stop
+    if step != 1:
+        run_kwargs["step"] = step
+    aligner.run(**run_kwargs)
 
-    # Calculate RMSD statistics
-    rmsd_values = aligner.results.rmsd[:, 2]  # RMSD column
+    # MDAnalysis >= 2.0 returns a 1-D RMSD array; older versions return
+    # a 2-D array with columns (frame_index, time, rmsd).
+    raw_rmsd = aligner.results.rmsd
+    rmsd_values = raw_rmsd[:, 2] if raw_rmsd.ndim == 2 else raw_rmsd
 
     return AlignmentResult(
         output_trajectory=output,

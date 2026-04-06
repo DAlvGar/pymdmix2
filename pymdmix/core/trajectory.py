@@ -179,9 +179,9 @@ class MDAnalysisReader(BaseTrajectoryReader):
     def __iter__(self) -> Iterator[Frame]:
         for ts in self._universe.trajectory:
             yield Frame(
-                coordinates=ts.positions.copy(),
-                time=ts.time if hasattr(ts, "time") else None,
-                box=ts.dimensions.copy() if ts.dimensions is not None else None,
+                coordinates=ts.positions.astype(np.float64),
+                time=float(ts.time) if hasattr(ts, "time") else None,
+                box=ts.dimensions.astype(np.float64) if ts.dimensions is not None else None,
             )
 
     def select_atoms(self, selection: str) -> NDArray[np.int64]:
