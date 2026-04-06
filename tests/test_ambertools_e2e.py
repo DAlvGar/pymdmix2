@@ -541,7 +541,7 @@ class TestProjectCreationWorkflow:
     def _project_dir(self, tmp_path_factory):
         """
         Create the full pymdmix project once and share it across all tests
-        in this class.  tleap is only invoked once per pytest session.
+        in this class.  tleap is only invoked once per test class.
         """
         import textwrap
 
