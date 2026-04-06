@@ -1582,7 +1582,15 @@ def plot_energy(
     click.echo(f"Plotting energy distributions for {len(replicas)} replica(s)")
 
     for replica in replicas:
-        grids = replica.fetch_grids(suffix="_dg")
+        seen_grid_keys: set[str] = set()
+        grids = []
+        for suffix in ("_DG", "_dg"):
+            for grid in replica.fetch_grids(suffix=suffix):
+                grid_name = grid.metadata.get("name", "unknown")
+                if grid_name in seen_grid_keys:
+                    continue
+                seen_grid_keys.add(grid_name)
+                grids.append(grid)
         if not grids:
             click.secho(f"  ✗ No energy grids for {replica.name}", fg="yellow")
             continue
@@ -1592,8 +1600,8 @@ def plot_energy(
             gname = grid.metadata.get("name", "unknown")
             if probe and probe not in gname:
                 continue
-            values = grid.data.flatten()
-            values = values[values < 100]  # strip mask value (999)
+            values = grid.data.ravel()
+            values = values[values != 999]  # strip mask value (999)
             if len(values):
                 probe_data[gname] = values
 
@@ -1659,8 +1667,8 @@ def plot_density(
             gname = grid.metadata.get("name", "unknown")
             if probe and probe not in gname:
                 continue
-            values = grid.data.flatten()
-            values = values[values > 0]  # keep only occupied voxels
+            flat_values = grid.data.ravel()
+            values = flat_values[flat_values > 0]  # keep only occupied voxels
             if len(values):
                 probe_data[gname] = values
 

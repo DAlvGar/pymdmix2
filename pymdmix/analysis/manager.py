@@ -138,7 +138,14 @@ def _wrap_base_action(name: str, base_cls: Any) -> type[Action]:
                 if k in ("step_selection", "use_aligned", "frame_step")
             }
             traj = self.replica.get_trajectory(**traj_kwargs)
-            output_dir = getattr(self.replica, "density_path", None)
+            # Use an explicitly provided output_dir if present, otherwise pick a
+            # sensible default from the replica based on the action name.
+            if "output_dir" in kwargs:
+                output_dir = kwargs["output_dir"]
+            elif "energy" in name:
+                output_dir = getattr(self.replica, "energy_path", None)
+            else:
+                output_dir = getattr(self.replica, "density_path", None)
             action_instance = base_cls()
             base_result = action_instance(
                 trajectory=traj,
@@ -146,7 +153,7 @@ def _wrap_base_action(name: str, base_cls: Any) -> type[Action]:
                 **{
                     k: v
                     for k, v in kwargs.items()
-                    if k not in ("step_selection", "use_aligned", "frame_step")
+                    if k not in ("step_selection", "use_aligned", "frame_step", "output_dir")
                 },
             )
             return {

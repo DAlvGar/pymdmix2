@@ -104,8 +104,8 @@ class TestActionsManager:
 
     def test_add_invalid_action(self):
         manager = ActionsManager()
-        # String action names raise NotImplementedError (planned feature)
-        with pytest.raises(NotImplementedError):
+        # Unknown string action names raise ValueError
+        with pytest.raises(ValueError, match="Unknown action"):
             manager.add_actions("not_an_action_class")
 
     def test_prepare_jobs(self):
