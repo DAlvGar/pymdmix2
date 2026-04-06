@@ -58,14 +58,17 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Run ambertools e2e tests
         run: |
+          mkdir -p "${{ github.workspace }}/artifacts"
           docker run --rm \
             --name pymdmix_e2e \
             -v "${{ github.workspace }}/tests:/opt/pymdmix/tests" \
+            -v "${{ github.workspace }}/artifacts:/artifacts" \
             --entrypoint pytest \
             pymdmix:ci \
             -m "ambertools" \
             --tb=short \
             -v \
+            --junitxml=/artifacts/report.xml \
             /opt/pymdmix/tests/test_ambertools_e2e.py
 
       # -----------------------------------------------------------------------
@@ -77,5 +80,5 @@ jobs:
         with:
           name: e2e-ambertools-logs
           path: |
-            /tmp/pytest-*
+            ${{ github.workspace }}/artifacts/
           retention-days: 7

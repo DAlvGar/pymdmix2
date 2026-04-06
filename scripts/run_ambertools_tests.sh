@@ -34,7 +34,7 @@ set -euo pipefail
 IMAGE_NAME="${IMAGE_NAME:-pymdmix}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 REBUILD="${REBUILD:-0}"
-PYTEST_ARGS="${PYTEST_ARGS:--v --tb=short}"
+PYTEST_ARGS="${PYTEST_ARGS:--v --tb=short}"  # note: :- is bash default operator; default is "-v --tb=short"
 MARKER="${MARKER:-ambertools}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

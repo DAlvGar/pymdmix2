@@ -61,7 +61,7 @@ if [[ -n "${DEF_FILE}" ]]; then
     echo "==> Building from definition file: ${DEF_FILE}"
     "${SING}" build "${EXTRA_ARGS[@]}" "${SIF_FILE}" "${DEF_FILE}"
 
-elif docker image inspect "${IMAGE_NAME}:${IMAGE_TAG}" &>/dev/null; then
+elif command -v docker &>/dev/null && docker image inspect "${IMAGE_NAME}:${IMAGE_TAG}" &>/dev/null; then
     # Local Docker image found — convert directly (no daemon push needed)
     echo "==> Converting local Docker image ${IMAGE_NAME}:${IMAGE_TAG} → ${SIF_FILE}"
     "${SING}" build "${EXTRA_ARGS[@]}" "${SIF_FILE}" "docker-daemon://${IMAGE_NAME}:${IMAGE_TAG}"
