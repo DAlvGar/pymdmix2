@@ -15,6 +15,11 @@ Directly, if AmberTools is already installed::
 
     pytest -m ambertools -v tests/test_ambertools_e2e.py
 
+With real trajectory data (requires both AmberTools and Git LFS data)::
+
+    git lfs pull
+    pytest -m "cpptraj and real_data" -v tests/
+
 Coverage
 --------
 1. AmberTools availability smoke-tests
@@ -23,6 +28,8 @@ Coverage
 4. ``CpptrajDensityAction`` on unsolvated and solvated systems
 5. Full pipeline: solvate → cpptraj density → :class:`~pymdmix.core.grid.Grid` → hotspots
 6. Full CLI project creation: project config → solvated replicas ready for Amber simulation
+7. ``CpptrajDensityAction`` on the real 20-frame ``traj.nc`` trajectory
+   (requires both cpptraj *and* the Git LFS data in ``tests/data/``)
 """
 
 from __future__ import annotations
@@ -33,20 +40,26 @@ import subprocess
 from importlib.resources import files
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 # ---------------------------------------------------------------------------
-# Bundled test data paths (accessed via importlib.resources)
+# Test data paths (tests/data/)
 # ---------------------------------------------------------------------------
 
-_DATA_DIR = Path(str(files("pymdmix").joinpath("data")))
-_PEP_DIR = _DATA_DIR / "test" / "pep"
-_SOLVENTS_DIR = _DATA_DIR / "solvents"
+_TEST_DATA_DIR = Path(__file__).parent / "data"
+_PEP_DIR = _TEST_DATA_DIR / "pep"
+_AMBER_DIR = _TEST_DATA_DIR / "amber"
+_SOLVENTS_DIR = Path(str(files("pymdmix").joinpath("data/solvents")))
 
 _PEP_PDB = _PEP_DIR / "pep.pdb"
 _PEP_OFF = _PEP_DIR / "pep.off"
 _PEP_PRMTOP = _PEP_DIR / "pep.prmtop"
 _PEP_PRMCRD = _PEP_DIR / "pep.prmcrd"
+
+# Real solvated-system data (stored via Git LFS)
+_SOLVATED_PDB = _AMBER_DIR / "pep_WAT_WAT_1.pdb"
+_TRAJ_NC = _AMBER_DIR / "traj.nc"
 
 
 # ---------------------------------------------------------------------------
@@ -753,3 +766,203 @@ class TestProjectCreationWorkflow:
             f"({solvated_atoms} <= {dry_atoms}).  "
             f"Solvation may have failed or the PDB was not written correctly."
         )
+
+
+# ===========================================================================
+# Group 7 — CpptrajDensityAction on the real 20-frame traj.nc
+# ===========================================================================
+
+
+@pytest.mark.cpptraj
+@pytest.mark.real_data
+class TestCpptrajWithRealTrajectory:
+    """
+    Run :class:`~pymdmix.analysis.density.CpptrajDensityAction` against the
+    real 20-frame solvated-peptide trajectory bundled in ``tests/data/amber/``.
+
+    This group requires **both** cpptraj (AmberTools) *and* the Git LFS data
+    to be available.  It is therefore tagged with both ``@pytest.mark.cpptraj``
+    and ``@pytest.mark.real_data``; either missing resource causes all tests in
+    this class to be auto-skipped.
+
+    Data used
+    ---------
+    * ``tests/data/amber/pep_WAT_WAT_1.pdb`` — solvated topology (7079 atoms)
+    * ``tests/data/amber/traj.nc``           — 20-frame Amber NetCDF trajectory
+
+    The topology is passed as a PDB file because cpptraj can read PDB directly
+    and no separate Amber prmtop is available for the pre-solvated system.
+    """
+
+    # Amber mask for all WAT oxygen atoms
+    _WAT_MASK = ":WAT@O"
+    # Grid centred at origin, covering ~50 Å — inside the ~47 Å box
+    _GRID_DIM = (50, 50, 50)
+    _GRID_ORIGIN = (-25.0, -25.0, -25.0)
+    _GRID_SPACING = 1.0
+
+    @staticmethod
+    def _lfs_available() -> bool:
+        """Return False when the real-data files are LFS pointers, not binaries."""
+        return _TRAJ_NC.exists() and _TRAJ_NC.stat().st_size > 100_000
+
+    def test_real_data_files_present(self):
+        """Both the solvated PDB and trajectory are present (LFS checked out)."""
+        if not self._lfs_available():
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        assert _SOLVATED_PDB.exists(), f"Solvated PDB not found: {_SOLVATED_PDB}"
+        assert _TRAJ_NC.exists(), f"Trajectory not found: {_TRAJ_NC}"
+        assert _TRAJ_NC.stat().st_size > 100_000, "traj.nc looks like an LFS pointer"
+
+    def test_cpptraj_density_wat_o_produces_dx(self, tmp_path):
+        """cpptraj computes WAT-O density on the real trajectory and writes a DX file."""
+        if not self._lfs_available():
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        from pymdmix.analysis.density import CpptrajDensityAction
+
+        action = CpptrajDensityAction()
+        result = action.run(
+            topology=_SOLVATED_PDB,
+            trajectory_pattern=[str(_TRAJ_NC)],
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
+            output_dir=tmp_path,
+            output_prefix="real_",
+        )
+
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
+        assert len(result.output_files) >= 1
+        dx_file = tmp_path / "real_WAT_O.dx"
+        assert dx_file.exists(), f"DX file not written: {dx_file}"
+        assert dx_file.stat().st_size > 0, "DX file is empty"
+
+    def test_cpptraj_density_grid_shape_matches_request(self, tmp_path):
+        """The DX grid loaded back has exactly the requested dimensions."""
+        if not self._lfs_available():
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        from pymdmix.analysis.density import CpptrajDensityAction
+        from pymdmix.core.grid import Grid
+
+        action = CpptrajDensityAction()
+        result = action.run(
+            topology=_SOLVATED_PDB,
+            trajectory_pattern=[str(_TRAJ_NC)],
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
+            output_dir=tmp_path,
+        )
+
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
+        grid = Grid.read_dx(result.output_files[0])
+        assert grid.data.shape == self._GRID_DIM
+
+    def test_cpptraj_density_grid_non_negative(self, tmp_path):
+        """All density values are ≥ 0 (raw counts from cpptraj)."""
+        if not self._lfs_available():
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        from pymdmix.analysis.density import CpptrajDensityAction
+        from pymdmix.core.grid import Grid
+
+        action = CpptrajDensityAction()
+        result = action.run(
+            topology=_SOLVATED_PDB,
+            trajectory_pattern=[str(_TRAJ_NC)],
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
+            output_dir=tmp_path,
+        )
+
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
+        grid = Grid.read_dx(result.output_files[0])
+        assert float(grid.data.min()) >= 0.0
+
+    def test_cpptraj_density_grid_has_nonzero_cells(self, tmp_path):
+        """WAT oxygen atoms are found inside the grid across 20 frames."""
+        if not self._lfs_available():
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        from pymdmix.analysis.density import CpptrajDensityAction
+        from pymdmix.core.grid import Grid
+
+        action = CpptrajDensityAction()
+        result = action.run(
+            topology=_SOLVATED_PDB,
+            trajectory_pattern=[str(_TRAJ_NC)],
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
+            output_dir=tmp_path,
+        )
+
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
+        grid = Grid.read_dx(result.output_files[0])
+        assert np.count_nonzero(grid.data) > 0, (
+            "cpptraj grid has no non-zero cells — WAT atoms may not be in the grid region"
+        )
+
+    def test_cpptraj_density_free_energy_has_negative_cells(self, tmp_path):
+        """
+        After Boltzmann inversion of the cpptraj density, some cells have
+        negative free energy (favourable WAT binding sites).
+        """
+        if not self._lfs_available():
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        from pymdmix.analysis.density import CpptrajDensityAction
+        from pymdmix.core.grid import Grid
+
+        action = CpptrajDensityAction()
+        result = action.run(
+            topology=_SOLVATED_PDB,
+            trajectory_pattern=[str(_TRAJ_NC)],
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
+            output_dir=tmp_path,
+        )
+
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
+        grid = Grid.read_dx(result.output_files[0])
+        fe_grid = grid.to_free_energy()
+        populated = grid.data > 0
+        assert np.any(fe_grid.data[populated] < 0), (
+            "Expected some negative FE values (favourable WAT sites) in cpptraj density"
+        )
+
+    def test_cpptraj_density_multiple_probes(self, tmp_path):
+        """cpptraj computes density for two probe masks in a single call."""
+        if not self._lfs_available():
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        from pymdmix.analysis.density import CpptrajDensityAction
+        from pymdmix.core.grid import Grid
+
+        probe_masks = {
+            "WAT_O": ":WAT@O",
+            "WAT_H1": ":WAT@H1",
+        }
+
+        action = CpptrajDensityAction()
+        result = action.run(
+            topology=_SOLVATED_PDB,
+            trajectory_pattern=[str(_TRAJ_NC)],
+            probe_masks=probe_masks,
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
+            output_dir=tmp_path,
+        )
+
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
+        assert len(result.output_files) == 2, (
+            f"Expected 2 DX files (one per probe), got {len(result.output_files)}"
+        )
+        for out_file in result.output_files:
+            assert Path(out_file).exists()
+            g = Grid.read_dx(out_file)
+            assert g.data.shape == self._GRID_DIM

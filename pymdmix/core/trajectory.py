@@ -178,10 +178,21 @@ class MDAnalysisReader(BaseTrajectoryReader):
 
     def __iter__(self) -> Iterator[Frame]:
         for ts in self._universe.trajectory:
+            # MDAnalysis uses float32 internally; Frame.coordinates is typed
+            # float64.  Use astype with copy=False so no copy is made when
+            # positions are already float64 (e.g., on some backends).
+            pos = ts.positions
+            coords = pos if pos.dtype == np.float64 else pos.astype(np.float64)
+            dims = ts.dimensions
+            box = (
+                (dims if dims.dtype == np.float64 else dims.astype(np.float64))
+                if dims is not None
+                else None
+            )
             yield Frame(
-                coordinates=ts.positions.copy(),
-                time=ts.time if hasattr(ts, "time") else None,
-                box=ts.dimensions.copy() if ts.dimensions is not None else None,
+                coordinates=coords,
+                time=float(ts.time) if hasattr(ts, "time") else None,
+                box=box,
             )
 
     def select_atoms(self, selection: str) -> NDArray[np.int64]:

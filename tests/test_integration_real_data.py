@@ -1,24 +1,23 @@
 """
-Integration tests using bundled real test data.
+Integration tests using real test data from tests/data/.
 
-These tests load the actual data files shipped in ``pymdmix/data/test/pep/``
-and the solvent JSON definitions to verify that the I/O layer, parsers, and
-analysis modules work correctly end-to-end with representative inputs.
+These tests load the data files in ``tests/data/pep/`` and the solvent JSON
+definitions to verify that the I/O layer, parsers, and analysis modules work
+correctly end-to-end with representative inputs.
 
 Data used
 ---------
-* ``pymdmix/data/test/pep/pep.pdb``       – peptide structure (8 residues)
-* ``pymdmix/data/test/pep/pep.prmtop``    – Amber topology
-* ``pymdmix/data/test/pep/pep.off``       – LEaP object file
-* ``pymdmix/data/test/pep/pep_amber_mdmix.cfg`` – legacy Amber MDMix config
-* ``pymdmix/data/test/pep/multisettings.cfg``  – multi-section settings file
-* ``pymdmix/data/solvents/*.json``         – solvent definitions
+* ``tests/data/pep/pep.pdb``             – peptide structure (8 residues)
+* ``tests/data/pep/pep.prmtop``          – Amber topology
+* ``tests/data/pep/pep.off``             – LEaP object file
+* ``tests/data/pep/pep_amber_mdmix.cfg`` – legacy Amber MDMix config
+* ``tests/data/pep/multisettings.cfg``   – multi-section settings file
+* ``pymdmix/data/solvents/*.json``       – solvent definitions (package data)
 """
 
 from __future__ import annotations
 
 import json
-import os
 from importlib.resources import files
 from pathlib import Path
 
@@ -29,11 +28,12 @@ import pytest
 # Data path helpers
 # ---------------------------------------------------------------------------
 
-# Use importlib.resources so the paths work whether pymdmix is installed as a
-# regular package or as an editable install.
-_DATA_DIR = Path(str(files("pymdmix").joinpath("data")))
-_PEP_DIR = _DATA_DIR / "test" / "pep"
-_SOLVENTS_DIR = _DATA_DIR / "solvents"
+# Test data lives in tests/data/ (not shipped with the package).
+_TEST_DATA_DIR = Path(__file__).parent / "data"
+_PEP_DIR = _TEST_DATA_DIR / "pep"
+
+# Solvent JSON files are still package data (accessed via importlib.resources).
+_SOLVENTS_DIR = Path(str(files("pymdmix").joinpath("data/solvents")))
 
 # Minimum number of solvent JSON files expected in the bundled library
 # (ETA, WAT, MAM, ISO, ANT, MOH, ION, PYR, ISO5 are all present)

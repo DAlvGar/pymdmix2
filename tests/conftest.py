@@ -10,6 +10,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+# ---------------------------------------------------------------------------
+# Test data directory
+# ---------------------------------------------------------------------------
+
+# All test data lives under tests/data/ — NOT inside the pymdmix package.
+_TEST_DATA_DIR = Path(__file__).parent / "data"
+_PEP_DATA_DIR = _TEST_DATA_DIR / "pep"
+_AMBER_DATA_DIR = _TEST_DATA_DIR / "amber"
+_GRIDS_DATA_DIR = _TEST_DATA_DIR / "grids"
+
 
 # ---------------------------------------------------------------------------
 # Custom marker auto-skip hooks
@@ -19,11 +29,16 @@ import pytest
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
-        "ambertools: marks tests that require AmberTools (tleap, LEaP) to be installed",
+        "ambertools: marks tests that require AmberTools (tleap, cpptraj, LEaP) to be installed",
     )
     config.addinivalue_line(
         "markers",
-        "cpptraj: marks tests that require the cpptraj binary from AmberTools",
+        "cpptraj: marks tests that specifically exercise cpptraj; cpptraj ships with AmberTools "
+        "so these tests are skipped under the same condition as 'ambertools'",
+    )
+    config.addinivalue_line(
+        "markers",
+        "real_data: marks tests that require large test data files (traj.nc, DX grids, etc.) in tests/data/",
     )
 
 
@@ -43,10 +58,18 @@ def _cpptraj_available() -> bool:
     return bool(os.environ.get("AMBER_PTRAJ")) or shutil.which("cpptraj") is not None
 
 
+def _real_data_available() -> bool:
+    """Return True if the test trajectory file is present (LFS objects checked out)."""
+    return (_AMBER_DATA_DIR / "traj.nc").exists()
+
+
 def pytest_collection_modifyitems(config, items):
-    """Auto-skip ambertools/cpptraj tests when the required tools are absent."""
+    """Auto-skip ambertools/cpptraj/real_data tests when the required tools or data are absent."""
     amber_ok = _tleap_available()
-    cpptraj_ok = _cpptraj_available()
+    # cpptraj ships with AmberTools — treat it as available whenever AmberTools
+    # is present, with _cpptraj_available() as a fallback for standalone installs.
+    cpptraj_ok = amber_ok or _cpptraj_available()
+    real_data_ok = _real_data_available()
 
     skip_amber = pytest.mark.skip(
         reason=(
@@ -56,9 +79,14 @@ def pytest_collection_modifyitems(config, items):
     )
     skip_cpptraj = pytest.mark.skip(
         reason=(
-            "cpptraj not available. "
-            "Set AMBER_PTRAJ or add cpptraj to PATH; run inside Docker: "
-            "./scripts/run_ambertools_tests.sh"
+            "AmberTools (cpptraj) not available. "
+            "Install AmberTools or run inside Docker: ./scripts/run_ambertools_tests.sh"
+        )
+    )
+    skip_real_data = pytest.mark.skip(
+        reason=(
+            "Real test data not available (Git LFS objects not checked out). "
+            "Run: git lfs pull"
         )
     )
 
@@ -67,7 +95,96 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_amber)
         if "cpptraj" in item.keywords and not cpptraj_ok:
             item.add_marker(skip_cpptraj)
+        if "real_data" in item.keywords and not real_data_ok:
+            item.add_marker(skip_real_data)
 
+
+# ---------------------------------------------------------------------------
+# Test data path fixtures (tests/data/)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def test_data_dir() -> Path:
+    """Root of the tests/data/ directory."""
+    return _TEST_DATA_DIR
+
+
+@pytest.fixture(scope="session")
+def pep_data_dir() -> Path:
+    """Path to tests/data/pep/ containing the bundled test peptide."""
+    return _PEP_DATA_DIR
+
+
+@pytest.fixture(scope="session")
+def pep_pdb_path() -> Path:
+    """Path to the test peptide PDB file (tests/data/pep/pep.pdb)."""
+    p = _PEP_DATA_DIR / "pep.pdb"
+    assert p.exists(), f"Test PDB not found: {p}"
+    return p
+
+
+@pytest.fixture(scope="session")
+def pep_prmtop_path() -> Path:
+    """Path to the test peptide Amber topology (tests/data/pep/pep.prmtop)."""
+    p = _PEP_DATA_DIR / "pep.prmtop"
+    assert p.exists(), f"Test prmtop not found: {p}"
+    return p
+
+
+@pytest.fixture(scope="session")
+def pep_prmcrd_path() -> Path:
+    """Path to the test peptide Amber coordinates (tests/data/pep/pep.prmcrd)."""
+    p = _PEP_DATA_DIR / "pep.prmcrd"
+    assert p.exists(), f"Test prmcrd not found: {p}"
+    return p
+
+
+@pytest.fixture(scope="session")
+def pep_off_path() -> Path:
+    """Path to the test peptide LEaP object file (tests/data/pep/pep.off)."""
+    p = _PEP_DATA_DIR / "pep.off"
+    assert p.exists(), f"Test OFF not found: {p}"
+    return p
+
+
+@pytest.fixture(scope="session")
+def solvated_pep_pdb_path() -> Path:
+    """
+    Path to the pre-solvated peptide structure (tests/data/amber/pep_WAT_WAT_1.pdb).
+
+    This is a WAT-solvated system from the legacy test data.
+    Marked ``real_data`` — skip if file absent (LFS not checked out).
+    """
+    return _AMBER_DATA_DIR / "pep_WAT_WAT_1.pdb"
+
+
+@pytest.fixture(scope="session")
+def amber_traj_nc_path() -> Path:
+    """
+    Path to the Amber NetCDF trajectory (tests/data/amber/traj.nc).
+
+    This is a multi-frame WAT-solvated trajectory of the test peptide from the
+    legacy test data.  Marked ``real_data`` — skip if file absent (LFS not
+    checked out).
+    """
+    return _AMBER_DATA_DIR / "traj.nc"
+
+
+@pytest.fixture(scope="session")
+def eta_ct_dx_path() -> Path:
+    """
+    Path to the pre-computed ETA CT probe density grid (tests/data/grids/ETA_CT.dx).
+
+    This is a full-size DX density grid computed from the legacy test trajectory.
+    Marked ``real_data`` — skip if file absent (LFS not checked out).
+    """
+    return _GRIDS_DATA_DIR / "ETA_CT.dx"
+
+
+# ---------------------------------------------------------------------------
+# General-purpose fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
