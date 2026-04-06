@@ -63,8 +63,8 @@ include = ["pymdmix*"]
 testpaths = ["tests"]
 python_files = "test_*.py"
 markers = [
-    "ambertools: marks tests that require AmberTools (tleap, LEaP) to be installed",
-    "cpptraj: marks tests that require the cpptraj binary from AmberTools",
+    "ambertools: marks tests that require AmberTools (tleap, cpptraj, LEaP) to be installed",
+    "cpptraj: marks tests that specifically exercise cpptraj; cpptraj ships with AmberTools so these skip under the same condition",
     "real_data: marks tests that require large test data files (traj.nc, DX grids, etc.) in tests/data/",
 ]
 

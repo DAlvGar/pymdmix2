@@ -29,11 +29,12 @@ _GRIDS_DATA_DIR = _TEST_DATA_DIR / "grids"
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
-        "ambertools: marks tests that require AmberTools (tleap, LEaP) to be installed",
+        "ambertools: marks tests that require AmberTools (tleap, cpptraj, LEaP) to be installed",
     )
     config.addinivalue_line(
         "markers",
-        "cpptraj: marks tests that require the cpptraj binary from AmberTools",
+        "cpptraj: marks tests that specifically exercise cpptraj; cpptraj ships with AmberTools "
+        "so these tests are skipped under the same condition as 'ambertools'",
     )
     config.addinivalue_line(
         "markers",
@@ -65,7 +66,9 @@ def _real_data_available() -> bool:
 def pytest_collection_modifyitems(config, items):
     """Auto-skip ambertools/cpptraj/real_data tests when the required tools or data are absent."""
     amber_ok = _tleap_available()
-    cpptraj_ok = _cpptraj_available()
+    # cpptraj ships with AmberTools — treat it as available whenever AmberTools
+    # is present, with _cpptraj_available() as a fallback for standalone installs.
+    cpptraj_ok = amber_ok or _cpptraj_available()
     real_data_ok = _real_data_available()
 
     skip_amber = pytest.mark.skip(
@@ -76,9 +79,8 @@ def pytest_collection_modifyitems(config, items):
     )
     skip_cpptraj = pytest.mark.skip(
         reason=(
-            "cpptraj not available. "
-            "Set AMBER_PTRAJ or add cpptraj to PATH; run inside Docker: "
-            "./scripts/run_ambertools_tests.sh"
+            "AmberTools (cpptraj) not available. "
+            "Install AmberTools or run inside Docker: ./scripts/run_ambertools_tests.sh"
         )
     )
     skip_real_data = pytest.mark.skip(
