@@ -220,10 +220,7 @@ def create_project(
         # original pyMDMix) uses an OFF file that already contains the protein
         # force-field parameters; PDB is the alternative.
         input_path = system_cfg.input_file
-        is_solvatable = (
-            input_path.suffix.lower() in _SOLVATABLE_EXTENSIONS
-            and input_path.exists()
-        )
+        is_solvatable = input_path.suffix.lower() in _SOLVATABLE_EXTENSIONS and input_path.exists()
         has_tleap = bool(shutil.which("tleap") or shutil.which("tLeap"))
 
         if not is_solvatable:
@@ -1573,8 +1570,56 @@ def plot_energy(
     Examples:
         pymdmix plot energy all --probe CT
     """
-    click.echo("Plotting energy distributions...")
-    # Implementation would use matplotlib
+    from pymdmix.io.plotting import plot_probe_distribution
+
+    project_path = Path(project)
+    replicas, _ = parse_selection(selection_type, selection, project_path)
+
+    if not replicas:
+        click.secho("✗ No replicas selected", fg="red")
+        sys.exit(1)
+
+    click.echo(f"Plotting energy distributions for {len(replicas)} replica(s)")
+
+    for replica in replicas:
+        seen_grid_keys: set[str] = set()
+        grids = []
+        for suffix in ("_DG", "_dg"):
+            for grid in replica.fetch_grids(suffix=suffix):
+                grid_name = grid.metadata.get("name", "unknown")
+                if grid_name in seen_grid_keys:
+                    continue
+                seen_grid_keys.add(grid_name)
+                grids.append(grid)
+        if not grids:
+            click.secho(f"  ✗ No energy grids for {replica.name}", fg="yellow")
+            continue
+
+        probe_data: dict = {}
+        for grid in grids:
+            gname = grid.metadata.get("name", "unknown")
+            if probe and probe not in gname:
+                continue
+            values = grid.data.ravel()
+            values = values[values != 999]  # strip mask value (999)
+            if len(values):
+                probe_data[gname] = values
+
+        if not probe_data:
+            click.secho(f"  ✗ No matching energy grids for {replica.name}", fg="yellow")
+            continue
+
+        out_file = output or f"{replica.name}_energy.png"
+        try:
+            plot_probe_distribution(
+                probe_energies=probe_data,
+                title=f"Energy Distribution: {replica.name}",
+                output=out_file,
+            )
+            click.echo(f"  {replica.name} → {out_file}")
+        except Exception as e:
+            click.secho(f"  ✗ {replica.name}: {e}", fg="red")
+
     click.secho("✓ Energy plots generated", fg="green")
 
 
@@ -1600,7 +1645,50 @@ def plot_density(
     Examples:
         pymdmix plot density all --probe OH
     """
-    click.echo("Plotting density distributions...")
+    from pymdmix.io.plotting import plot_probe_distribution
+
+    project_path = Path(project)
+    replicas, _ = parse_selection(selection_type, selection, project_path)
+
+    if not replicas:
+        click.secho("✗ No replicas selected", fg="red")
+        sys.exit(1)
+
+    click.echo(f"Plotting density distributions for {len(replicas)} replica(s)")
+
+    for replica in replicas:
+        grids = replica.fetch_grids(suffix="_density")
+        if not grids:
+            click.secho(f"  ✗ No density grids for {replica.name}", fg="yellow")
+            continue
+
+        probe_data: dict = {}
+        for grid in grids:
+            gname = grid.metadata.get("name", "unknown")
+            if probe and probe not in gname:
+                continue
+            flat_values = grid.data.ravel()
+            values = flat_values[flat_values > 0]  # keep only occupied voxels
+            if len(values):
+                probe_data[gname] = values
+
+        if not probe_data:
+            click.secho(f"  ✗ No matching density grids for {replica.name}", fg="yellow")
+            continue
+
+        out_file = output or f"{replica.name}_density.png"
+        try:
+            plot_probe_distribution(
+                probe_energies=probe_data,
+                title=f"Density Distribution: {replica.name}",
+                output=out_file,
+                xlabel="Density (occupancy per frame)",
+                zero_line=False,
+            )
+            click.echo(f"  {replica.name} → {out_file}")
+        except Exception as e:
+            click.secho(f"  ✗ {replica.name}: {e}", fg="red")
+
     click.secho("✓ Density plots generated", fg="green")
 
 

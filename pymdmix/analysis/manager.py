@@ -119,6 +119,55 @@ class JobResult:
     error: str | None = None
 
 
+def _wrap_base_action(name: str, base_cls: Any) -> type[Action]:
+    """
+    Adapt a ``base.Action`` (trajectory-level) to the manager's ``Action`` API.
+
+    The adapter calls ``replica.get_trajectory()`` and routes output to the
+    replica's ``density_path``, then converts the ``base.ActionResult`` into
+    the manager's plain-dict ``ActionResult``.
+    """
+
+    class _Adapter(Action):
+        action_name = name
+
+        def run(self, **kwargs: Any) -> ActionResult:
+            traj_kwargs = {
+                k: v
+                for k, v in self.params.items()
+                if k in ("step_selection", "use_aligned", "frame_step")
+            }
+            traj = self.replica.get_trajectory(**traj_kwargs)
+            # Use an explicitly provided output_dir if present, otherwise pick a
+            # sensible default from the replica based on the action name.
+            if "output_dir" in kwargs:
+                output_dir = kwargs["output_dir"]
+            elif "energy" in name:
+                output_dir = getattr(self.replica, "energy_path", None)
+            else:
+                output_dir = getattr(self.replica, "density_path", None)
+            action_instance = base_cls()
+            base_result = action_instance(
+                trajectory=traj,
+                output_dir=output_dir,
+                **{
+                    k: v
+                    for k, v in kwargs.items()
+                    if k not in ("step_selection", "use_aligned", "frame_step", "output_dir")
+                },
+            )
+            return {
+                "success": base_result.success,
+                "output_files": [str(f) for f in base_result.output_files],
+                "metadata": base_result.metadata,
+                "error": base_result.error,
+            }
+
+    _Adapter.__name__ = f"Manager_{base_cls.__name__}"
+    _Adapter.__qualname__ = f"Manager_{base_cls.__name__}"
+    return _Adapter
+
+
 def _run_job(job: Job) -> JobResult:
     """
     Execute a single job (used by process pool).
@@ -206,8 +255,15 @@ class ActionsManager:
 
         for action in action_list:
             if isinstance(action, str):
-                # Try to resolve by name (for CLI use)
-                raise NotImplementedError("String action names not yet supported")
+                from pymdmix.analysis.base import get_action, list_actions
+
+                base_cls = get_action(action)
+                if base_cls is None:
+                    available = list_actions()
+                    raise ValueError(
+                        f"Unknown action: {action!r}. Available registered actions: {available}"
+                    )
+                self.action_classes.append(_wrap_base_action(action, base_cls))
             elif isinstance(action, type) and issubclass(action, Action):
                 self.action_classes.append(action)
             else:
