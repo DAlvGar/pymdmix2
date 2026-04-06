@@ -479,14 +479,20 @@ def plot_probe_distribution(
     title: str = "Probe Energy Distribution",
     output: str | Path | None = None,
     figsize: tuple[float, float] = (10, 6),
+    xlabel: str = "Energy (kcal/mol)",
+    ylabel: str = "Count",
+    zero_line: bool = True,
 ) -> plt.Figure:
-    """Plot distribution of energies for each probe type.
+    """Plot value distribution histograms for each probe type.
 
     Args:
-        probe_energies: Dictionary mapping probe names to energy arrays
+        probe_energies: Dictionary mapping probe names to value arrays
         title: Plot title
         output: If given, save figure to this path
         figsize: Figure size in inches
+        xlabel: X-axis label (default: 'Energy (kcal/mol)')
+        ylabel: Y-axis label (default: 'Count')
+        zero_line: Whether to draw a vertical line at zero
 
     Returns:
         matplotlib Figure object
@@ -494,27 +500,27 @@ def plot_probe_distribution(
     plt = _check_matplotlib()
 
     n_probes = len(probe_energies)
+    if n_probes == 0:
+        raise ValueError("probe_energies dict is empty")
 
     fig, axes = plt.subplots(1, n_probes, figsize=figsize, sharey=True)
     if n_probes == 1:
         axes = [axes]
 
-    for ax, (name, energies) in zip(axes, probe_energies.items()):
-        energies = np.asarray(energies)
-        # Filter out masked values (e.g., 999)
-        energies = energies[energies < 100]
+    for ax, (name, values) in zip(axes, probe_energies.items()):
+        values = np.asarray(values)
 
-        ax.hist(energies, bins=50, alpha=0.7, color="steelblue", edgecolor="white")
-        ax.set_xlabel("Energy (kcal/mol)")
+        ax.hist(values, bins=50, alpha=0.7, color="steelblue", edgecolor="white")
+        ax.set_xlabel(xlabel)
         ax.set_title(name)
-        ax.axvline(0, color="red", ls="--", lw=1)
+        if zero_line:
+            ax.axvline(0, color="red", ls="--", lw=1)
 
-        # Statistics
-        mean_e = np.mean(energies)
-        _min_e = np.min(energies)
-        ax.axvline(mean_e, color="orange", ls=":", lw=1, label=f"mean={mean_e:.2f}")
+        mean_v = np.mean(values)
+        ax.axvline(mean_v, color="orange", ls=":", lw=1, label=f"mean={mean_v:.3f}")
+        ax.legend(fontsize=8)
 
-    axes[0].set_ylabel("Count")
+    axes[0].set_ylabel(ylabel)
     fig.suptitle(title)
     fig.tight_layout()
 
