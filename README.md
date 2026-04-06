@@ -218,6 +218,37 @@ uv run mypy pymdmix
 
 ---
 
+## Testing
+
+The test suite has three tiers:
+
+| Tier | Marker | Requires |
+|------|--------|----------|
+| Standard | *(none)* | Python + optional extras |
+| Real-data | `real_data` | Git LFS binary files (`git lfs pull`) |
+| AmberTools | `ambertools` / `cpptraj` | AmberTools installation or Docker |
+
+```bash
+# Standard tests (no extra setup)
+uv run pytest tests/
+
+# Real-data tests (need LFS data)
+git lfs pull
+uv run pytest -m real_data -v tests/
+
+# AmberTools tests (need tleap/cpptraj)
+./scripts/run_ambertools_tests.sh
+
+# cpptraj on the real trajectory (needs both)
+git lfs pull
+MARKER="cpptraj and real_data" ./scripts/run_ambertools_tests.sh
+```
+
+See [docs/testing.md](docs/testing.md) for the full guide including Docker
+instructions and how to add new tests.
+
+---
+
 ## Project Structure
 
 ```
@@ -239,6 +270,7 @@ pymdmix/
 See `docs/` and `examples/` for detailed guides.
 
 - [Quick Start](docs/quickstart.md)
+- [Testing Guide](docs/testing.md)
 - [User Guide: Projects](docs/user-guide/projects.md)
 - [User Guide: MD Settings](docs/user-guide/md-settings.md)
 - [Tutorials](docs/tutorials/toy-project-setup.md)

@@ -259,53 +259,115 @@ class TestDensityWithSelectionProbes:
 @pytest.mark.real_data
 @pytest.mark.cpptraj
 class TestCpptrajDensityRealTrajectory:
-    """Run CpptrajDensityAction on the real solvated-peptide trajectory."""
+    """Run CpptrajDensityAction on the real solvated-peptide trajectory.
+
+    The real trajectory ``tests/data/amber/traj.nc`` contains 7079 atoms
+    (solvated peptide + 2319 WAT molecules).  cpptraj requires a topology
+    that matches this atom count, so we use ``pep_WAT_WAT_1.pdb`` as the
+    topology file (cpptraj accepts PDB as a topology source).
+
+    Grid: 50 × 50 × 50 cells at 1 Å spacing centred near the peptide
+    (peptide centre-of-geometry is close to the origin in the reference frame).
+    """
+
+    # Amber mask for WAT oxygen atoms
+    _WAT_MASK = ":WAT@O"
+    # Grid parameters matching the solvated box (~47 Å side)
+    _GRID_DIM = (50, 50, 50)
+    _GRID_ORIGIN = (-25.0, -25.0, -25.0)
+    _GRID_SPACING = 1.0
 
     def test_cpptraj_density_produces_dx(
-        self, solvated_pep_pdb_path, pep_prmtop_path, amber_traj_nc_path, tmp_output_dir
+        self, solvated_pep_pdb_path, amber_traj_nc_path, tmp_output_dir
     ):
         """CpptrajDensityAction writes a DX grid file when cpptraj is present."""
         if not _is_real_trajectory(amber_traj_nc_path):
             pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
         from pymdmix.analysis.density import CpptrajDensityAction
-        from pymdmix.core.solvent import SolventLibrary
-
-        library = SolventLibrary()
-        solvent = library.get("WAT")
-        probe = solvent.probes[0]  # WAT O probe
 
         action = CpptrajDensityAction()
         result = action.run(
-            topology=pep_prmtop_path,
+            topology=solvated_pep_pdb_path,
             trajectory_pattern=[str(amber_traj_nc_path)],
-            probe_mask=probe.mask,
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
             output_dir=tmp_output_dir,
-            output_prefix="WAT_O",
+            output_prefix="real_",
         )
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
         assert len(result.output_files) >= 1
         for f in result.output_files:
-            assert Path(f).exists()
+            assert Path(f).exists(), f"Expected output file does not exist: {f}"
 
-    def test_cpptraj_density_grid_non_negative(
-        self, solvated_pep_pdb_path, pep_prmtop_path, amber_traj_nc_path, tmp_output_dir
+    def test_cpptraj_density_grid_shape(
+        self, solvated_pep_pdb_path, amber_traj_nc_path, tmp_output_dir
     ):
-        """CpptrajDensityAction grid values are non-negative."""
+        """Grid shape matches the requested dimensions."""
         if not _is_real_trajectory(amber_traj_nc_path):
             pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
         from pymdmix.analysis.density import CpptrajDensityAction
-        from pymdmix.core.solvent import SolventLibrary
-
-        library = SolventLibrary()
-        solvent = library.get("WAT")
-        probe = solvent.probes[0]
 
         action = CpptrajDensityAction()
         result = action.run(
-            topology=pep_prmtop_path,
+            topology=solvated_pep_pdb_path,
             trajectory_pattern=[str(amber_traj_nc_path)],
-            probe_mask=probe.mask,
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
             output_dir=tmp_output_dir,
-            output_prefix="WAT_O_cpptraj",
+            output_prefix="shape_",
         )
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
+        grid = Grid.read_dx(result.output_files[0])
+        assert grid.data.shape == self._GRID_DIM
+
+    def test_cpptraj_density_grid_non_negative(
+        self, solvated_pep_pdb_path, amber_traj_nc_path, tmp_output_dir
+    ):
+        """CpptrajDensityAction grid values are non-negative (raw counts)."""
+        if not _is_real_trajectory(amber_traj_nc_path):
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        from pymdmix.analysis.density import CpptrajDensityAction
+
+        action = CpptrajDensityAction()
+        result = action.run(
+            topology=solvated_pep_pdb_path,
+            trajectory_pattern=[str(amber_traj_nc_path)],
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
+            output_dir=tmp_output_dir,
+            output_prefix="nonneg_",
+        )
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
         grid = Grid.read_dx(result.output_files[0])
         assert float(grid.data.min()) >= 0.0
+
+    def test_cpptraj_density_grid_has_nonzero_counts(
+        self, solvated_pep_pdb_path, amber_traj_nc_path, tmp_output_dir
+    ):
+        """WAT oxygen atoms are counted in the grid (non-trivial density)."""
+        if not _is_real_trajectory(amber_traj_nc_path):
+            pytest.skip("traj.nc is an LFS pointer — run: git lfs pull")
+        from pymdmix.analysis.density import CpptrajDensityAction
+
+        action = CpptrajDensityAction()
+        result = action.run(
+            topology=solvated_pep_pdb_path,
+            trajectory_pattern=[str(amber_traj_nc_path)],
+            probe_masks={"WAT_O": self._WAT_MASK},
+            grid_dimensions=self._GRID_DIM,
+            grid_origin=self._GRID_ORIGIN,
+            grid_spacing=self._GRID_SPACING,
+            output_dir=tmp_output_dir,
+            output_prefix="counts_",
+        )
+        assert result.success, f"CpptrajDensityAction failed: {result.error}"
+        grid = Grid.read_dx(result.output_files[0])
+        assert np.count_nonzero(grid.data) > 0, (
+            "Expected non-zero WAT counts in the density grid"
+        )
