@@ -1,8 +1,12 @@
-name: E2E AmberTools Tests
+name: Full Test Suite (Docker / AmberTools)
 
-# Runs the pytest suite that requires real AmberTools binaries (tleap, cpptraj).
-# Tests execute inside the project's Docker image so the CI environment
-# exactly mirrors the container users are expected to run.
+# Runs the complete pytest suite inside the project's Docker image.
+# The image ships AmberTools (tleap + cpptraj), so every test tier runs:
+#   - standard tests    (no marker)  – always run
+#   - ambertools tests  (@ambertools) – tleap / LEaP available in image
+#   - cpptraj tests     (@cpptraj)   – cpptraj ships with AmberTools
+#   - real_data tests   (@real_data) – skipped unless tests/data/ LFS files
+#                                      are present (see step 3 below)
 #
 # Triggers:
 #   - Push / merge to main
@@ -17,8 +21,8 @@ on:
     - cron: "0 6 * * 1" # 06:00 UTC every Monday
 
 jobs:
-  e2e-ambertools:
-    name: E2E tests (AmberTools inside Docker)
+  full-suite-docker:
+    name: Full test suite (Docker with AmberTools)
     runs-on: ubuntu-latest
     timeout-minutes: 90 # conda build + tests can take a while on a cold cache
     permissions:
@@ -26,10 +30,12 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
-      # 1. Checkout
+      # 1. Checkout (with LFS so real_data tests can run too)
       # -----------------------------------------------------------------------
-      - name: Checkout repository
+      - name: Checkout repository (with LFS)
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       # -----------------------------------------------------------------------
       # 2. Set up Docker Buildx (required for cache export)
@@ -52,33 +58,33 @@ jobs:
           cache-to: type=gha,mode=max
 
       # -----------------------------------------------------------------------
-      # 4. Run the ambertools-marked pytest suite inside the container.
-      #    The image's WORKDIR is /work; we mount the repo so test source
-      #    changes are picked up without a rebuild.
+      # 4. Run the FULL test suite inside the container.
+      #    No -m filter — all tiers run.  AmberTools (tleap + cpptraj) is
+      #    available in the image so ambertools/cpptraj tests are NOT skipped.
+      #    real_data tests run because we checked out LFS files in step 1.
       # -----------------------------------------------------------------------
-      - name: Run ambertools e2e tests
+      - name: Run full test suite
         run: |
           mkdir -p "${{ github.workspace }}/artifacts"
           docker run --rm \
-            --name pymdmix_e2e \
+            --name pymdmix_ci \
             -v "${{ github.workspace }}/tests:/opt/pymdmix/tests" \
             -v "${{ github.workspace }}/artifacts:/artifacts" \
             --entrypoint pytest \
             pymdmix:ci \
-            -m "ambertools" \
             --tb=short \
             -v \
             --junitxml=/artifacts/report.xml \
-            /opt/pymdmix/tests/test_ambertools_e2e.py
+            /opt/pymdmix/tests/
 
       # -----------------------------------------------------------------------
-      # 5. (Optional) Upload test reports as an artifact for debugging
+      # 5. Upload test reports as an artifact for debugging
       # -----------------------------------------------------------------------
-      - name: Upload test logs on failure
-        if: failure()
+      - name: Upload test report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-ambertools-logs
+          name: test-report
           path: |
             ${{ github.workspace }}/artifacts/
           retention-days: 7
